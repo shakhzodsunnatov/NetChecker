@@ -1,5 +1,6 @@
 import SwiftUI
 import NetCheckerTrafficCore
+import Combine
 
 #if canImport(UIKit)
 import UIKit
@@ -52,7 +53,7 @@ struct TrafficInspectorModifier: ViewModifier {
     func body(content: Content) -> some View {
         content
             #if canImport(UIKit)
-            .onChange(of: shakeDetector.shakeDetected) { _, detected in
+            .onReceive(shakeDetector.$shakeDetected) { detected in
                 if detected && triggerOnShake {
                     isPresented = true
                     shakeDetector.reset()
