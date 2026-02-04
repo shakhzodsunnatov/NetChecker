@@ -49,7 +49,6 @@ TrafficInterceptor.shared.start()
 <img width="180" alt="Menu Options" src="https://github.com/user-attachments/assets/223f364d-518f-4275-b01b-acf45c9c6f82" />
 <img width="180" alt="Edit & Retry" src="https://github.com/user-attachments/assets/6cf31d28-f0f0-4adc-9e21-3bf49e03cb11" />
 <img width="180" alt="Traffic List" src="https://github.com/user-attachments/assets/fb76cf9d-4b36-45bf-a7a7-fbc88e731026" />
-<img width="180" alt="Request Details" src="https://github.com/user-attachments/assets/f2179f8b-cf6e-4063-a4aa-7d7c1a837853" />
 </p>
 
 <p align="center">
