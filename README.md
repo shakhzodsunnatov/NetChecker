@@ -143,16 +143,30 @@ Then add the product to your target:
 
 ## 🚀 Quick Start
 
-### 1. Start Intercepting (2 lines of code)
+### Option 1: Shake-to-Open (Recommended)
+
+The easiest way to integrate NetChecker — just add the `.netChecker()` modifier:
 
 ```swift
+import SwiftUI
 import NetCheckerTraffic
 
-// In your App's init or AppDelegate
-TrafficInterceptor.shared.start()
+@main
+struct MyApp: App {
+    var body: some Scene {
+        WindowGroup {
+            ContentView()
+                .netChecker()  // ← Shake device to open inspector!
+        }
+    }
+}
 ```
 
-### 2. Add the Traffic Inspector UI
+**That's it!** Shake your device to open the traffic inspector. No UI changes needed.
+
+### Option 2: Tab-Based Integration
+
+For permanent access, add a Traffic tab:
 
 ```swift
 import SwiftUI
@@ -167,13 +181,69 @@ struct ContentView: View {
             TrafficListView()  // ← Add this tab
                 .tabItem { Label("Network", systemImage: "network") }
         }
+        .onAppear {
+            TrafficInterceptor.shared.start()
+        }
     }
 }
 ```
 
-### 3. That's It! 🎉
+### Option 3: Manual Start Only
 
-All network requests now appear in the Traffic tab with full details.
+If you just want interception without UI:
+
+```swift
+import NetCheckerTraffic
+
+// In your App's init or AppDelegate
+TrafficInterceptor.shared.start()
+```
+
+---
+
+## 📱 The `.netChecker()` Modifier
+
+The simplest way to add network debugging to your app:
+
+```swift
+ContentView()
+    .netChecker()
+```
+
+### Features
+
+- **Shake to Open**: Shake your device to instantly open the traffic inspector
+- **Full Inspector UI**: Traffic list, environment switching, mock rules, and settings
+- **Zero UI Changes**: Works with any app structure — tabs, navigation, or custom layouts
+- **Presentation Styles**: Choose between sheet or full-screen cover
+
+### Configuration Options
+
+```swift
+// Default: shake-to-open with sheet presentation
+.netChecker()
+
+// Disable shake gesture (use programmatic trigger)
+.netChecker(triggerOnShake: false)
+
+// Full screen presentation
+.netChecker(presentationStyle: .fullScreenCover)
+
+// Disable in production
+.netChecker(enabled: false)
+
+// Alternative name
+.trafficInspector()
+```
+
+### Conditional Enablement
+
+```swift
+ContentView()
+    #if DEBUG
+    .netChecker()
+    #endif
+```
 
 ---
 
@@ -305,27 +375,49 @@ ForEach(breakpointEngine.pausedRequests) { paused in
 Switch between environments without rebuilding:
 
 ```swift
-// Define your environments
-TrafficInterceptor.shared.addEnvironment(
-    group: "API",
-    source: "api.myapp.com",
+// Create environment group
+let apiGroup = EnvironmentGroup(
+    name: "API Server",
+    sourcePattern: "api.myapp.com",
     environments: [
-        Environment(name: "Production", host: "api.myapp.com"),
-        Environment(name: "Staging", host: "staging-api.myapp.com"),
-        Environment(name: "Development", host: "dev-api.myapp.com", variables: [
-            "DEBUG": "true",
-            "LOG_LEVEL": "verbose"
-        ])
+        Environment(
+            name: "Production",
+            emoji: "🟢",
+            baseURL: URL(string: "https://api.myapp.com")!,
+            isDefault: true,
+            variables: ["DEBUG": "false"]
+        ),
+        Environment(
+            name: "Staging",
+            emoji: "🟡",
+            baseURL: URL(string: "https://staging-api.myapp.com")!,
+            variables: ["DEBUG": "true", "API_VERSION": "v2-beta"]
+        ),
+        Environment(
+            name: "Development",
+            emoji: "🔧",
+            baseURL: URL(string: "https://dev-api.myapp.com")!,
+            variables: ["DEBUG": "true", "LOG_LEVEL": "verbose"]
+        ),
+        Environment(
+            name: "Local",
+            emoji: "💻",
+            baseURL: URL(string: "http://localhost:3000")!,
+            variables: ["LOCAL": "true"]
+        )
     ]
 )
 
-// Switch environments at runtime
-TrafficInterceptor.shared.switchEnvironment(group: "API", to: "Staging")
+// Add to store
+EnvironmentStore.shared.addGroup(apiGroup)
 
-// Quick temporary override
-TrafficInterceptor.shared.override(
-    host: "api.myapp.com",
-    with: "localhost:8080",
+// Switch environments at runtime
+EnvironmentStore.shared.switchEnvironment(group: "API Server", to: "Staging")
+
+// Quick temporary override (auto-expires after 5 minutes)
+EnvironmentStore.shared.addQuickOverride(
+    from: "api.myapp.com",
+    to: "localhost:8080",
     autoDisableAfter: 300  // 5 minutes
 )
 

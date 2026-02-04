@@ -3,7 +3,15 @@
 
 @_exported import NetCheckerTrafficCore
 
-// Views
+// MARK: - View Modifiers
+
+// The `.netChecker()` and `.trafficInspector()` modifiers are available
+// directly on View via the extension in TrafficInspectorModifier.swift
+
+// MARK: - Presentation Style
+// TrafficInspectorPresentationStyle is exported from TrafficInspectorModifier.swift
+
+// MARK: - Views
 public typealias TrafficListView = NetCheckerTrafficUI_TrafficListView
 public typealias TrafficDetailView = NetCheckerTrafficUI_TrafficDetailView
 public typealias RequestDetailView = NetCheckerTrafficUI_RequestDetailView
