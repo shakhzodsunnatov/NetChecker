@@ -1,5 +1,7 @@
 <p align="center">
-  <img src="https://raw.githubusercontent.com/shakhzodsunnatov/NetChecker/main/Assets/logo.png" alt="NetChecker Logo" width="200" height="200">
+<img width="858" height="336" alt="lightWordmark" src="https://github.com/user-attachments/assets/734078db-33b8-41a4-a917-4aec963a0b70" />
+<img width="858" height="336" alt="darkWordmark" src="https://github.com/user-attachments/assets/e18f105c-fc88-4628-9844-2423e4c449d0" />
+
 </p>
 
 <h1 align="center">NetChecker</h1>
@@ -41,10 +43,11 @@ TrafficInterceptor.shared.start()
 ## 📸 Screenshots
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/shakhzodsunnatov/NetChecker/main/Assets/traffic-list.png" width="200" alt="Traffic List">
-  <img src="https://raw.githubusercontent.com/shakhzodsunnatov/NetChecker/main/Assets/request-details.png" width="200" alt="Request Details">
-  <img src="https://raw.githubusercontent.com/shakhzodsunnatov/NetChecker/main/Assets/edit-retry.png" width="200" alt="Edit & Retry">
-  <img src="https://raw.githubusercontent.com/shakhzodsunnatov/NetChecker/main/Assets/menu-options.png" width="200" alt="Menu Options">
+<img width="645" height="1398" alt="IMG_1845 2" src="https://github.com/user-attachments/assets/003cdd12-9abc-41f3-b19e-88ee0497c45a" />
+<img width="645" height="1398" alt="IMG_1847" src="https://github.com/user-attachments/assets/223f364d-518f-4275-b01b-acf45c9c6f82" />
+<img width="645" height="1398" alt="IMG_1849" src="https://github.com/user-attachments/assets/6cf31d28-f0f0-4adc-9e21-3bf49e03cb11" />
+<img width="645" height="1398" alt="IMG_1846" src="https://github.com/user-attachments/assets/fb76cf9d-4b36-45bf-a7a7-fbc88e731026" />
+<img width="645" height="1398" alt="IMG_1848" src="https://github.com/user-attachments/assets/f2179f8b-cf6e-4063-a4aa-7d7c1a837853" />
 </p>
 
 <p align="center">
