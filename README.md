@@ -36,8 +36,19 @@ Stop switching between your app and external proxy tools. **NetChecker** brings 
 TrafficInterceptor.shared.start()
 ```
 
+---
+
+## 📸 Screenshots
+
 <p align="center">
-  <img src="https://raw.githubusercontent.com/shakhzodsunnatov/NetChecker/main/Assets/demo.gif" alt="NetChecker Demo" width="300">
+  <img src="https://raw.githubusercontent.com/shakhzodsunnatov/NetChecker/main/Assets/traffic-list.png" width="200" alt="Traffic List">
+  <img src="https://raw.githubusercontent.com/shakhzodsunnatov/NetChecker/main/Assets/request-details.png" width="200" alt="Request Details">
+  <img src="https://raw.githubusercontent.com/shakhzodsunnatov/NetChecker/main/Assets/edit-retry.png" width="200" alt="Edit & Retry">
+  <img src="https://raw.githubusercontent.com/shakhzodsunnatov/NetChecker/main/Assets/menu-options.png" width="200" alt="Menu Options">
+</p>
+
+<p align="center">
+  <em>Traffic List • Request Details • Edit & Retry • Menu Options</em>
 </p>
 
 ---
