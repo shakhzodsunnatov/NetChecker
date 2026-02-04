@@ -5,35 +5,38 @@ import Combine
 #if canImport(UIKit)
 import UIKit
 
-// MARK: - Shake Detection
+// MARK: - Shake Gesture Detection via UIWindow Extension
 
-/// Custom UIWindow that detects shake gestures
-final class ShakeDetectingWindow: UIWindow {
-    static var onShake: (() -> Void)?
-
-    override func motionEnded(_ motion: UIEvent.EventSubtype, with event: UIEvent?) {
-        if motion == .motionShake {
-            ShakeDetectingWindow.onShake?()
-        }
+extension UIWindow {
+    open override func motionEnded(_ motion: UIEvent.EventSubtype, with event: UIEvent?) {
         super.motionEnded(motion, with: event)
+
+        if motion == .motionShake {
+            NotificationCenter.default.post(name: .deviceDidShake, object: nil)
+        }
     }
 }
 
-/// Observable object to track shake events
-@MainActor
-final class ShakeDetector: ObservableObject {
-    @Published var shakeDetected = false
+extension Notification.Name {
+    static let deviceDidShake = Notification.Name("NetCheckerDeviceDidShake")
+}
 
-    init() {
-        ShakeDetectingWindow.onShake = { [weak self] in
-            Task { @MainActor in
-                self?.shakeDetected = true
+// MARK: - Shake Gesture View Modifier
+
+struct ShakeGestureViewModifier: ViewModifier {
+    let action: () -> Void
+
+    func body(content: Content) -> some View {
+        content
+            .onReceive(NotificationCenter.default.publisher(for: .deviceDidShake)) { _ in
+                action()
             }
-        }
     }
+}
 
-    func reset() {
-        shakeDetected = false
+extension View {
+    func onShake(perform action: @escaping () -> Void) -> some View {
+        self.modifier(ShakeGestureViewModifier(action: action))
     }
 }
 #endif
@@ -43,20 +46,15 @@ final class ShakeDetector: ObservableObject {
 struct TrafficInspectorModifier: ViewModifier {
     @State private var isPresented = false
 
-    #if canImport(UIKit)
-    @StateObject private var shakeDetector = ShakeDetector()
-    #endif
-
     let triggerOnShake: Bool
     let presentationStyle: TrafficInspectorPresentationStyle
 
     func body(content: Content) -> some View {
         content
             #if canImport(UIKit)
-            .onReceive(shakeDetector.$shakeDetected) { detected in
-                if detected && triggerOnShake {
+            .onShake {
+                if triggerOnShake {
                     isPresented = true
-                    shakeDetector.reset()
                 }
             }
             #endif
@@ -121,17 +119,21 @@ struct TrafficInspectorSheet: View {
                         Label("Traffic", systemImage: "network")
                     }
 
-                NetCheckerTrafficUI_EnvironmentSwitcherView()
-                    .tag(1)
-                    .tabItem {
-                        Label("Environments", systemImage: "server.rack")
-                    }
+                NavigationStack {
+                    NetCheckerTrafficUI_EnvironmentSwitcherView()
+                }
+                .tag(1)
+                .tabItem {
+                    Label("Environments", systemImage: "server.rack")
+                }
 
-                NetCheckerTrafficUI_MockRulesView()
-                    .tag(2)
-                    .tabItem {
-                        Label("Mocks", systemImage: "theatermasks")
-                    }
+                NavigationStack {
+                    NetCheckerTrafficUI_MockRulesView()
+                }
+                .tag(2)
+                .tabItem {
+                    Label("Mocks", systemImage: "theatermasks")
+                }
 
                 SettingsView()
                     .tag(3)
