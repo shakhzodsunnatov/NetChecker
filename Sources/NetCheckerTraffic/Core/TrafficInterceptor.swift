@@ -62,13 +62,6 @@ public final class TrafficInterceptor: ObservableObject {
 
     /// Запустить перехват с указанной конфигурацией
     public func start(configuration: InterceptorConfiguration) {
-        #if !DEBUG
-        guard configuration.enableInRelease else {
-            print("[NetChecker] Warning: Traffic interception is disabled in Release builds. Set enableInRelease=true to override (not recommended).")
-            return
-        }
-        #endif
-
         guard !isRunning else {
             print("[NetChecker] Traffic interception is already running")
             return
@@ -207,25 +200,17 @@ public extension TrafficInterceptor {
         start(configuration: config)
     }
 
-    /// Включить SSL bypass для хостов (только DEBUG)
+    /// Включить SSL bypass для хостов
     func allowSelfSignedCertificates(for hosts: Set<String>) {
-        #if DEBUG
         var config = configuration
         config.ssl.trustMode = .allowSelfSigned(hosts: hosts)
         self.configuration = config
-        #else
-        print("[NetChecker] SSL bypass is not available in Release builds")
-        #endif
     }
 
     /// Включить режим прокси (Charles/Proxyman)
     func enableProxyMode(for hosts: Set<String>) {
-        #if DEBUG
         var config = configuration
         config.ssl.trustMode = .allowProxy(proxyHosts: hosts)
         self.configuration = config
-        #else
-        print("[NetChecker] Proxy mode is not available in Release builds")
-        #endif
     }
 }

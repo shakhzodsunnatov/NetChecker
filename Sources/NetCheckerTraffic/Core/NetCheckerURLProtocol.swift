@@ -147,15 +147,37 @@ public final class NetCheckerURLProtocol: URLProtocol {
 
             TrafficStore.shared.add(record)
 
-            // Check for mocks
+            // Check for mocks first
             if let mockResponse = MockEngine.shared.match(request: mutableRequest as URLRequest) {
                 self.handleMockResponse(mockResponse)
                 return
             }
 
-            // Check for breakpoints (simplified - just log for now)
+            // Check for breakpoints - this will pause and wait for user action
             if BreakpointEngine.shared.shouldPause(request: mutableRequest as URLRequest) {
-                // TODO: Implement breakpoint pause with async continuation
+                // Pause the request and wait for user to resume/cancel
+                let result = await BreakpointEngine.shared.pause(request: mutableRequest as URLRequest)
+
+                if let modifiedRequest = result {
+                    // User resumed - use the (possibly modified) request
+                    // Update mutableRequest with any modifications
+                    if let newURL = modifiedRequest.url {
+                        mutableRequest.url = newURL
+                    }
+                    if let method = modifiedRequest.httpMethod {
+                        mutableRequest.httpMethod = method
+                    }
+                    mutableRequest.allHTTPHeaderFields = modifiedRequest.allHTTPHeaderFields
+                    mutableRequest.httpBody = modifiedRequest.httpBody
+                } else {
+                    // User cancelled - fail the request
+                    self.client?.urlProtocol(self, didFailWithError: NSError(
+                        domain: NSURLErrorDomain,
+                        code: NSURLErrorCancelled,
+                        userInfo: [NSLocalizedDescriptionKey: "Request cancelled by breakpoint"]
+                    ))
+                    return
+                }
             }
 
             // Start the actual request on the URL loading queue
@@ -303,7 +325,6 @@ extension NetCheckerURLProtocol: URLSessionDataDelegate {
 
         let host = challenge.protectionSpace.host
 
-        #if DEBUG
         switch config.trustMode {
         case .strict:
             completionHandler(.performDefaultHandling, nil)
@@ -350,10 +371,6 @@ extension NetCheckerURLProtocol: URLSessionDataDelegate {
                 completionHandler(.cancelAuthenticationChallenge, nil)
             }
         }
-        #else
-        // In Release, always use default handling
-        completionHandler(.performDefaultHandling, nil)
-        #endif
     }
 }
 

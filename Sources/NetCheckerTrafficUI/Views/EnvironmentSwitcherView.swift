@@ -5,8 +5,7 @@ import NetCheckerTrafficCore
 public struct NetCheckerTrafficUI_EnvironmentSwitcherView: View {
     @ObservedObject private var store = EnvironmentStore.shared
     @State private var showingAddGroup = false
-    @State private var showingAddEnvironment = false
-    @State private var selectedGroup: EnvironmentGroup?
+    @State private var groupForNewEnvironment: EnvironmentGroup?
 
     public init() {}
 
@@ -42,7 +41,12 @@ public struct NetCheckerTrafficUI_EnvironmentSwitcherView: View {
             // Environment groups
             ForEach(store.groups) { group in
                 Section {
-                    EnvironmentGroupView(group: group, selectedGroup: $selectedGroup)
+                    EnvironmentGroupView(
+                        group: group,
+                        onAddEnvironment: {
+                            groupForNewEnvironment = group
+                        }
+                    )
                 } header: {
                     HStack {
                         Text(group.name)
@@ -75,8 +79,7 @@ public struct NetCheckerTrafficUI_EnvironmentSwitcherView: View {
 
                     if let group = store.groups.first {
                         Button {
-                            selectedGroup = group
-                            showingAddEnvironment = true
+                            groupForNewEnvironment = group
                         } label: {
                             Label("Add Environment", systemImage: "plus")
                         }
@@ -91,11 +94,9 @@ public struct NetCheckerTrafficUI_EnvironmentSwitcherView: View {
                 AddEnvironmentGroupView()
             }
         }
-        .sheet(isPresented: $showingAddEnvironment) {
-            if let group = selectedGroup {
-                NavigationStack {
-                    NetCheckerTrafficUI_AddEnvironmentView(group: group)
-                }
+        .sheet(item: $groupForNewEnvironment) { group in
+            NavigationStack {
+                NetCheckerTrafficUI_AddEnvironmentView(group: group)
             }
         }
     }
@@ -105,7 +106,7 @@ public struct NetCheckerTrafficUI_EnvironmentSwitcherView: View {
 
 struct EnvironmentGroupView: View {
     let group: EnvironmentGroup
-    @Binding var selectedGroup: EnvironmentGroup?
+    let onAddEnvironment: () -> Void
 
     @ObservedObject private var store = EnvironmentStore.shared
 
@@ -126,7 +127,7 @@ struct EnvironmentGroupView: View {
         }
 
         Button {
-            selectedGroup = group
+            onAddEnvironment()
         } label: {
             Label("Add Environment", systemImage: "plus")
                 .font(.subheadline)

@@ -1,6 +1,8 @@
 import SwiftUI
 #if canImport(UIKit)
 import UIKit
+#elseif canImport(AppKit)
+import AppKit
 #endif
 
 /// Share sheet wrapper for UIActivityViewController
@@ -104,6 +106,14 @@ public struct ExportMenuButton: View {
     public var body: some View {
         Menu {
             Button {
+                copyFullAPI()
+            } label: {
+                Label("Copy Full API", systemImage: "doc.on.doc")
+            }
+
+            Divider()
+
+            Button {
                 shareText(CURLFormatter.format(record: record))
             } label: {
                 Label("Copy as cURL", systemImage: "terminal")
@@ -117,6 +127,8 @@ public struct ExportMenuButton: View {
             } label: {
                 Label("Export as HAR", systemImage: "doc.text")
             }
+
+            Divider()
 
             Button {
                 shareURL()
@@ -147,13 +159,111 @@ public struct ExportMenuButton: View {
     private func shareText(_ text: String) {
         #if canImport(UIKit)
         UIPasteboard.general.string = text
+        #elseif canImport(AppKit)
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(text, forType: .string)
         #endif
     }
 
     private func shareURL() {
         #if canImport(UIKit)
         UIPasteboard.general.url = record.url
+        #elseif canImport(AppKit)
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(record.url.absoluteString, forType: .string)
         #endif
+    }
+
+    private func copyFullAPI() {
+        var output = ""
+
+        // Request Section
+        output += "══════ REQUEST ══════\n\n"
+
+        // Method & URL
+        output += "[\(record.method.rawValue)] \(record.url.absoluteString)\n\n"
+
+        // Timestamp & Duration
+        let dateFormatter = DateFormatter()
+        dateFormatter.dateFormat = "yyyy-MM-dd HH:mm:ss"
+        output += "Time: \(dateFormatter.string(from: record.timestamp)) | \(record.formattedDuration)\n\n"
+
+        // Request Headers
+        if !record.request.headers.isEmpty {
+            output += "── Headers ──\n"
+            for (key, value) in record.request.headers.sorted(by: { $0.key < $1.key }) {
+                output += "\(key): \(value)\n"
+            }
+            output += "\n"
+        }
+
+        // Request Body
+        if let requestBody = record.request.bodyString, !requestBody.isEmpty {
+            output += "── Body ──\n"
+            output += formatJSONIfPossible(requestBody)
+            output += "\n\n"
+        }
+
+        // Response Section
+        output += "══════ RESPONSE ══════\n\n"
+
+        if let response = record.response {
+            // Status & Size
+            output += "Status: \(response.statusCode)"
+            if let bodySize = response.body?.count, bodySize > 0 {
+                output += " | \(formatBytes(bodySize))"
+            }
+            output += "\n\n"
+
+            // Response Headers
+            if !response.headers.isEmpty {
+                output += "── Headers ──\n"
+                for (key, value) in response.headers.sorted(by: { $0.key < $1.key }) {
+                    output += "\(key): \(value)\n"
+                }
+                output += "\n"
+            }
+
+            // Response Body
+            if let responseBody = response.bodyString, !responseBody.isEmpty {
+                output += "── Body ──\n"
+                output += formatJSONIfPossible(responseBody)
+                output += "\n"
+            }
+        } else {
+            switch record.state {
+            case .pending:
+                output += "Status: Pending...\n"
+            case .failed(let error):
+                output += "Status: Failed\nError: \(error)\n"
+            case .mocked:
+                output += "Status: Mocked\n"
+            default:
+                output += "Status: No response\n"
+            }
+        }
+
+        shareText(output)
+    }
+
+    private func formatJSONIfPossible(_ text: String) -> String {
+        guard let data = text.data(using: .utf8),
+              let json = try? JSONSerialization.jsonObject(with: data),
+              let prettyData = try? JSONSerialization.data(withJSONObject: json, options: [.prettyPrinted, .sortedKeys]),
+              let prettyString = String(data: prettyData, encoding: .utf8) else {
+            return text
+        }
+        return prettyString
+    }
+
+    private func formatBytes(_ bytes: Int) -> String {
+        if bytes < 1024 {
+            return "\(bytes) B"
+        } else if bytes < 1024 * 1024 {
+            return String(format: "%.2f KB", Double(bytes) / 1024)
+        } else {
+            return String(format: "%.2f MB", Double(bytes) / (1024 * 1024))
+        }
     }
 }
 

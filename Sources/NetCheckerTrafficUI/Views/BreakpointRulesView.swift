@@ -108,6 +108,9 @@ struct PausedRequestRow: View {
     let paused: PausedRequest
 
     @ObservedObject private var engine = BreakpointEngine.shared
+    @ObservedObject private var mockEngine = MockEngine.shared
+    @State private var showingEditor = false
+    @State private var showingMockCreator = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -123,13 +126,24 @@ struct PausedRequestRow: View {
                 Text(formatDuration(paused.pausedDuration))
                     .font(.caption)
                     .foregroundColor(.orange)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 2)
+                    .background(Color.orange.opacity(0.15))
+                    .cornerRadius(4)
             }
 
             Text(paused.host)
                 .font(.caption)
                 .foregroundColor(.secondary)
 
-            HStack(spacing: 12) {
+            if let url = paused.url {
+                Text(url.absoluteString)
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
+                    .lineLimit(2)
+            }
+
+            HStack(spacing: 8) {
                 Button {
                     engine.resume(id: paused.id, with: nil)
                 } label: {
@@ -138,16 +152,45 @@ struct PausedRequestRow: View {
                 }
                 .buttonStyle(.borderedProminent)
 
+                Button {
+                    showingEditor = true
+                } label: {
+                    Label("Edit", systemImage: "pencil")
+                        .font(.caption)
+                }
+                .buttonStyle(.bordered)
+
+                Button {
+                    showingMockCreator = true
+                } label: {
+                    Label("Mock", systemImage: "theatermasks")
+                        .font(.caption)
+                }
+                .buttonStyle(.bordered)
+                .tint(.purple)
+
+                Spacer()
+
                 Button(role: .destructive) {
                     engine.cancel(id: paused.id)
                 } label: {
-                    Label("Cancel", systemImage: "xmark")
+                    Image(systemName: "xmark")
                         .font(.caption)
                 }
                 .buttonStyle(.bordered)
             }
         }
         .padding(.vertical, 4)
+        .sheet(isPresented: $showingEditor) {
+            NavigationStack {
+                PausedRequestEditorView(paused: paused)
+            }
+        }
+        .sheet(isPresented: $showingMockCreator) {
+            NavigationStack {
+                QuickMockCreatorView(paused: paused)
+            }
+        }
     }
 
     private func formatDuration(_ duration: TimeInterval) -> String {
@@ -155,6 +198,238 @@ struct PausedRequestRow: View {
             return String(format: "%.0f ms", duration * 1000)
         }
         return String(format: "%.1f s", duration)
+    }
+}
+
+// MARK: - Paused Request Editor View
+
+struct PausedRequestEditorView: View {
+    let paused: PausedRequest
+
+    @SwiftUI.Environment(\.dismiss) private var dismiss
+    @ObservedObject private var engine = BreakpointEngine.shared
+
+    @State private var url: String
+    @State private var method: String
+    @State private var headers: [String: String]
+    @State private var requestBody: String
+
+    init(paused: PausedRequest) {
+        self.paused = paused
+        _url = State(initialValue: paused.originalRequest.url?.absoluteString ?? "")
+        _method = State(initialValue: paused.originalRequest.httpMethod ?? "GET")
+        _headers = State(initialValue: paused.originalRequest.allHTTPHeaderFields ?? [:])
+        _requestBody = State(initialValue: String(data: paused.originalRequest.httpBody ?? Data(), encoding: .utf8) ?? "")
+    }
+
+    var body: some View {
+        Form {
+            Section("URL") {
+                TextField("URL", text: $url)
+                    #if os(iOS)
+                    .textInputAutocapitalization(.never)
+                    .keyboardType(.URL)
+                    #endif
+                    .autocorrectionDisabled()
+            }
+
+            Section("Method") {
+                Picker("Method", selection: $method) {
+                    ForEach(["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"], id: \.self) { m in
+                        Text(m).tag(m)
+                    }
+                }
+                .pickerStyle(.segmented)
+            }
+
+            Section("Headers") {
+                ForEach(Array(headers.keys.sorted()), id: \.self) { key in
+                    VStack(alignment: .leading) {
+                        Text(key)
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        Text(headers[key] ?? "")
+                            .font(.system(.caption, design: .monospaced))
+                    }
+                }
+            }
+
+            if !requestBody.isEmpty {
+                Section("Body") {
+                    TextEditor(text: $requestBody)
+                        .font(.system(.caption, design: .monospaced))
+                        .frame(minHeight: 100)
+                }
+            }
+        }
+        .navigationTitle("Edit Request")
+        #if os(iOS)
+        .navigationBarTitleDisplayMode(.inline)
+        #endif
+        .toolbar {
+            ToolbarItem(placement: .cancellationAction) {
+                Button("Cancel") {
+                    dismiss()
+                }
+            }
+
+            ToolbarItem(placement: .confirmationAction) {
+                Button("Resume") {
+                    resumeWithModifiedRequest()
+                }
+            }
+        }
+    }
+
+    private func resumeWithModifiedRequest() {
+        guard let requestURL = URL(string: url) else {
+            engine.resume(id: paused.id, with: nil)
+            dismiss()
+            return
+        }
+
+        var request = URLRequest(url: requestURL)
+        request.httpMethod = method
+        request.allHTTPHeaderFields = headers
+        if !requestBody.isEmpty {
+            request.httpBody = requestBody.data(using: .utf8)
+        }
+
+        engine.resume(id: paused.id, with: request)
+        dismiss()
+    }
+}
+
+// MARK: - Quick Mock Creator View
+
+struct QuickMockCreatorView: View {
+    let paused: PausedRequest
+
+    @SwiftUI.Environment(\.dismiss) private var dismiss
+    @ObservedObject private var engine = BreakpointEngine.shared
+    @ObservedObject private var mockEngine = MockEngine.shared
+
+    @State private var statusCode = 200
+    @State private var responseBody = ""
+    @State private var contentType = "application/json"
+    @State private var enableAfterCreate = true
+
+    var body: some View {
+        Form {
+            Section {
+                Text(paused.url?.absoluteString ?? "")
+                    .font(.system(.caption, design: .monospaced))
+                    .foregroundColor(.secondary)
+            } header: {
+                Text("URL to Mock")
+            } footer: {
+                Text("This will create a mock rule that returns your custom response for this URL")
+            }
+
+            Section("Response Status") {
+                Picker("Status Code", selection: $statusCode) {
+                    Text("200 OK").tag(200)
+                    Text("201 Created").tag(201)
+                    Text("204 No Content").tag(204)
+                    Text("400 Bad Request").tag(400)
+                    Text("401 Unauthorized").tag(401)
+                    Text("403 Forbidden").tag(403)
+                    Text("404 Not Found").tag(404)
+                    Text("500 Server Error").tag(500)
+                }
+            }
+
+            Section("Content Type") {
+                Picker("Type", selection: $contentType) {
+                    Text("JSON").tag("application/json")
+                    Text("Plain Text").tag("text/plain")
+                    Text("HTML").tag("text/html")
+                    Text("XML").tag("application/xml")
+                }
+                .pickerStyle(.segmented)
+            }
+
+            Section("Response Body") {
+                TextEditor(text: $responseBody)
+                    .font(.system(.caption, design: .monospaced))
+                    .frame(minHeight: 150)
+
+                if contentType == "application/json" {
+                    Button("Format JSON") {
+                        formatJSON()
+                    }
+                    .disabled(responseBody.isEmpty)
+                }
+            }
+
+            Section {
+                Toggle("Enable mock after creating", isOn: $enableAfterCreate)
+            }
+        }
+        .navigationTitle("Create Mock Response")
+        #if os(iOS)
+        .navigationBarTitleDisplayMode(.inline)
+        #endif
+        .toolbar {
+            ToolbarItem(placement: .cancellationAction) {
+                Button("Cancel") {
+                    dismiss()
+                }
+            }
+
+            ToolbarItem(placement: .confirmationAction) {
+                Button("Create & Resume") {
+                    createMockAndResume()
+                }
+            }
+        }
+        .onAppear {
+            // Pre-fill with sample JSON
+            if responseBody.isEmpty {
+                responseBody = "{\n  \"message\": \"Mocked response\"\n}"
+            }
+        }
+    }
+
+    private func formatJSON() {
+        if let data = responseBody.data(using: .utf8),
+           let json = try? JSONSerialization.jsonObject(with: data),
+           let prettyData = try? JSONSerialization.data(withJSONObject: json, options: [.prettyPrinted, .sortedKeys]),
+           let prettyString = String(data: prettyData, encoding: .utf8) {
+            responseBody = prettyString
+        }
+    }
+
+    private func createMockAndResume() {
+        // Create URL pattern from the request URL
+        let urlPattern = paused.url?.absoluteString ?? "*"
+
+        // Create mock response
+        let response = MockResponse(
+            statusCode: statusCode,
+            headers: ["Content-Type": contentType],
+            body: responseBody.data(using: .utf8)
+        )
+
+        // Create and add the rule
+        let rule = MockRule(
+            name: "Mock: \(paused.path)",
+            isEnabled: enableAfterCreate,
+            matching: MockMatching(urlPattern: urlPattern),
+            action: .respond(response)
+        )
+
+        mockEngine.addRule(rule)
+
+        // Enable mock engine if needed
+        if enableAfterCreate && !mockEngine.isEnabled {
+            mockEngine.isEnabled = true
+        }
+
+        // Cancel the paused request (it will be mocked on retry)
+        engine.cancel(id: paused.id)
+
+        dismiss()
     }
 }
 

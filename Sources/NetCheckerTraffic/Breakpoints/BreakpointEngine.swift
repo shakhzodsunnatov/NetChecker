@@ -14,7 +14,11 @@ public final class BreakpointEngine: ObservableObject {
     @Published public private(set) var rules: [BreakpointRule] = []
 
     /// Включен ли движок
-    @Published public var isEnabled: Bool = true
+    @Published public var isEnabled: Bool = false {
+        didSet {
+            saveEnabledState()
+        }
+    }
 
     /// Приостановленные запросы
     @Published public private(set) var pausedRequests: [PausedRequest] = []
@@ -22,12 +26,14 @@ public final class BreakpointEngine: ObservableObject {
     // MARK: - Properties
 
     private let userDefaultsKey = "NetCheckerBreakpointRules"
+    private let enabledKey = "NetCheckerBreakpointsEnabled"
     private var continuations: [UUID: CheckedContinuation<URLRequest?, Never>] = [:]
 
     // MARK: - Initialization
 
     private init() {
         loadFromUserDefaults()
+        loadEnabledState()
     }
 
     // MARK: - Rule Management
@@ -171,6 +177,17 @@ public final class BreakpointEngine: ObservableObject {
             return
         }
         rules = decoded
+    }
+
+    private func saveEnabledState() {
+        UserDefaults.standard.set(isEnabled, forKey: enabledKey)
+    }
+
+    private func loadEnabledState() {
+        // Only load if value was previously saved, otherwise use default (false)
+        if UserDefaults.standard.object(forKey: enabledKey) != nil {
+            isEnabled = UserDefaults.standard.bool(forKey: enabledKey)
+        }
     }
 }
 

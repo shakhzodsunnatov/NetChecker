@@ -21,12 +21,8 @@ public final class SessionSwizzler {
 
         guard !isSwizzled else { return }
 
-        #if DEBUG
         swizzleProtocolClasses()
         isSwizzled = true
-        #else
-        print("[NetChecker] Warning: Swizzling is disabled in Release builds")
-        #endif
     }
 
     /// Деактивировать swizzling
@@ -36,10 +32,8 @@ public final class SessionSwizzler {
 
         guard isSwizzled else { return }
 
-        #if DEBUG
         unswizzleProtocolClasses()
         isSwizzled = false
-        #endif
     }
 
     // MARK: - Private Methods

@@ -352,41 +352,149 @@ struct EditMockRuleView: View {
     let onSave: (MockRule) -> Void
 
     @SwiftUI.Environment(\.dismiss) private var dismiss
+    @ObservedObject private var mockEngine = MockEngine.shared
 
     @State private var name: String
     @State private var isEnabled: Bool
+    @State private var urlPattern: String
+    @State private var host: String
+    @State private var selectedMethod: HTTPMethod?
+    @State private var statusCode: Int
+    @State private var responseBody: String
+    @State private var delaySeconds: Double
+    @State private var showDeleteConfirmation = false
 
     init(rule: MockRule, onSave: @escaping (MockRule) -> Void) {
         self.rule = rule
         self.onSave = onSave
         self._name = State(initialValue: rule.name)
         self._isEnabled = State(initialValue: rule.isEnabled)
+        self._urlPattern = State(initialValue: rule.matching.urlPattern ?? "")
+        self._host = State(initialValue: rule.matching.host ?? "")
+        self._selectedMethod = State(initialValue: rule.matching.method)
+
+        // Extract values from action
+        switch rule.action {
+        case .respond(let response):
+            self._statusCode = State(initialValue: response.statusCode)
+            let bodyString = response.body.flatMap { String(data: $0, encoding: .utf8) } ?? ""
+            self._responseBody = State(initialValue: bodyString)
+            self._delaySeconds = State(initialValue: 0)
+        case .delay(let seconds):
+            self._statusCode = State(initialValue: 200)
+            self._responseBody = State(initialValue: "")
+            self._delaySeconds = State(initialValue: seconds)
+        default:
+            self._statusCode = State(initialValue: 200)
+            self._responseBody = State(initialValue: "")
+            self._delaySeconds = State(initialValue: 0)
+        }
     }
 
     var body: some View {
         Form {
-            Section("Rule Info") {
+            Section {
                 TextField("Rule Name", text: $name)
                 Toggle("Enabled", isOn: $isEnabled)
+            } header: {
+                Text("Rule Info")
             }
 
-            Section("Matching") {
-                if let pattern = rule.matching.urlPattern {
-                    LabeledContent("URL Pattern", value: pattern)
+            Section {
+                TextField("URL Pattern", text: $urlPattern)
+                    #if os(iOS)
+                    .textInputAutocapitalization(.never)
+                    #endif
+                    .autocorrectionDisabled()
+
+                TextField("Host (optional)", text: $host)
+                    #if os(iOS)
+                    .textInputAutocapitalization(.never)
+                    #endif
+                    .autocorrectionDisabled()
+
+                Picker("Method", selection: $selectedMethod) {
+                    Text("Any").tag(nil as HTTPMethod?)
+                    ForEach(HTTPMethod.allCases, id: \.rawValue) { method in
+                        Text(method.rawValue).tag(method as HTTPMethod?)
+                    }
                 }
-                if let host = rule.matching.host {
-                    LabeledContent("Host", value: host)
+            } header: {
+                Text("Matching")
+            } footer: {
+                Text("Use * as wildcard, e.g., */api/users/*")
+            }
+
+            if case .respond = rule.action {
+                Section("Response") {
+                    Picker("Status Code", selection: $statusCode) {
+                        Group {
+                            Text("200 OK").tag(200)
+                            Text("201 Created").tag(201)
+                            Text("204 No Content").tag(204)
+                        }
+                        Divider()
+                        Group {
+                            Text("400 Bad Request").tag(400)
+                            Text("401 Unauthorized").tag(401)
+                            Text("403 Forbidden").tag(403)
+                            Text("404 Not Found").tag(404)
+                        }
+                        Divider()
+                        Group {
+                            Text("500 Server Error").tag(500)
+                            Text("502 Bad Gateway").tag(502)
+                            Text("503 Unavailable").tag(503)
+                        }
+                    }
+
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Response Body")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        TextEditor(text: $responseBody)
+                            .font(.system(.caption, design: .monospaced))
+                            .frame(minHeight: 150)
+                    }
+
+                    Button("Format JSON") {
+                        formatJSON()
+                    }
+                    .disabled(responseBody.isEmpty)
                 }
-                if let method = rule.matching.method {
-                    LabeledContent("Method", value: method.rawValue)
+            }
+
+            if case .delay = rule.action {
+                Section("Delay") {
+                    Stepper("Delay: \(Int(delaySeconds)) seconds", value: $delaySeconds, in: 1...60)
                 }
             }
 
             Section("Statistics") {
-                LabeledContent("Match Count", value: "\(rule.activationCount)")
+                HStack {
+                    Text("Match Count")
+                    Spacer()
+                    Text("\(rule.activationCount)")
+                        .foregroundColor(.secondary)
+                }
+            }
+
+            Section {
+                Button(role: .destructive) {
+                    showDeleteConfirmation = true
+                } label: {
+                    HStack {
+                        Spacer()
+                        Label("Delete Rule", systemImage: "trash")
+                        Spacer()
+                    }
+                }
             }
         }
         .navigationTitle("Edit Rule")
+        #if os(iOS)
+        .navigationBarTitleDisplayMode(.inline)
+        #endif
         .toolbar {
             ToolbarItem(placement: .cancellationAction) {
                 Button("Cancel") {
@@ -396,14 +504,60 @@ struct EditMockRuleView: View {
 
             ToolbarItem(placement: .confirmationAction) {
                 Button("Save") {
-                    var updatedRule = rule
-                    updatedRule.name = name
-                    updatedRule.isEnabled = isEnabled
-                    onSave(updatedRule)
-                    dismiss()
+                    saveRule()
                 }
+                .disabled(urlPattern.isEmpty && host.isEmpty && selectedMethod == nil)
             }
         }
+        .alert("Delete Rule?", isPresented: $showDeleteConfirmation) {
+            Button("Cancel", role: .cancel) { }
+            Button("Delete", role: .destructive) {
+                mockEngine.removeRule(id: rule.id)
+                dismiss()
+            }
+        } message: {
+            Text("This action cannot be undone.")
+        }
+    }
+
+    private func formatJSON() {
+        if let data = responseBody.data(using: .utf8),
+           let json = try? JSONSerialization.jsonObject(with: data),
+           let prettyData = try? JSONSerialization.data(withJSONObject: json, options: [.prettyPrinted, .sortedKeys]),
+           let prettyString = String(data: prettyData, encoding: .utf8) {
+            responseBody = prettyString
+        }
+    }
+
+    private func saveRule() {
+        let matching = MockMatching(
+            urlPattern: urlPattern.isEmpty ? nil : urlPattern,
+            method: selectedMethod,
+            host: host.isEmpty ? nil : host
+        )
+
+        var updatedRule = rule
+        updatedRule.name = name
+        updatedRule.isEnabled = isEnabled
+        updatedRule.matching = matching
+
+        // Update action based on original type
+        switch rule.action {
+        case .respond:
+            let response = MockResponse(
+                statusCode: statusCode,
+                headers: ["Content-Type": "application/json"],
+                body: responseBody.isEmpty ? nil : responseBody.data(using: .utf8)
+            )
+            updatedRule.action = .respond(response)
+        case .delay:
+            updatedRule.action = .delay(seconds: delaySeconds)
+        default:
+            break // Keep original action for other types
+        }
+
+        onSave(updatedRule)
+        dismiss()
     }
 }
 
