@@ -6,6 +6,7 @@ public struct NetCheckerTrafficUI_RequestEditorView: View {
     let originalRecord: TrafficRecord
 
     @SwiftUI.Environment(\.dismiss) private var dismiss
+    @ObservedObject private var environmentStore = EnvironmentStore.shared
 
     // Editable fields
     @State private var url: String
@@ -21,12 +22,22 @@ public struct NetCheckerTrafficUI_RequestEditorView: View {
     @State private var newHeaderKey = ""
     @State private var newHeaderValue = ""
 
+    // Original URL components for environment switching
+    private let originalHost: String?
+    private let originalScheme: String?
+    private let originalPort: Int?
+
     public init(record: TrafficRecord) {
         self.originalRecord = record
         _url = State(initialValue: record.url.absoluteString)
         _method = State(initialValue: record.method)
         _headers = State(initialValue: record.request.headers.map { EditableHeader(key: $0.key, value: $0.value) })
         _bodyText = State(initialValue: record.request.bodyString ?? "")
+
+        // Store original URL components
+        self.originalHost = record.url.host
+        self.originalScheme = record.url.scheme
+        self.originalPort = record.url.port
     }
 
     public var body: some View {
@@ -47,6 +58,52 @@ public struct NetCheckerTrafficUI_RequestEditorView: View {
                     Text("URL")
                 } footer: {
                     Text("Full URL including scheme and path")
+                }
+
+                // Environment Switcher Section
+                if !environmentStore.groups.isEmpty {
+                    Section {
+                        ForEach(environmentStore.groups) { group in
+                            if let matchingEnv = matchingEnvironments(for: group) {
+                                DisclosureGroup {
+                                    ForEach(group.environments) { env in
+                                        Button {
+                                            switchToEnvironment(env, in: group)
+                                        } label: {
+                                            HStack {
+                                                Text(env.emoji)
+                                                Text(env.name)
+                                                    .foregroundColor(.primary)
+                                                Spacer()
+                                                if isCurrentEnvironment(env) {
+                                                    Image(systemName: "checkmark")
+                                                        .foregroundColor(.blue)
+                                                }
+                                            }
+                                        }
+                                    }
+                                } label: {
+                                    HStack {
+                                        Text(group.name)
+                                            .font(.subheadline.weight(.medium))
+                                        Spacer()
+                                        Text(matchingEnv)
+                                            .font(.caption)
+                                            .foregroundColor(.secondary)
+                                    }
+                                }
+                            }
+                        }
+                    } header: {
+                        HStack {
+                            Text("Switch Environment")
+                            Spacer()
+                            Image(systemName: "arrow.triangle.swap")
+                                .foregroundColor(.secondary)
+                        }
+                    } footer: {
+                        Text("Quickly switch base URL to another environment")
+                    }
                 }
 
                 // Method Section
@@ -348,6 +405,56 @@ public struct NetCheckerTrafficUI_RequestEditorView: View {
                     isLoading = false
                 }
             }
+        }
+    }
+
+    // MARK: - Environment Switching
+
+    /// Check if an environment group has environments that could apply to the current URL
+    private func matchingEnvironments(for group: EnvironmentGroup) -> String? {
+        guard let currentURL = URL(string: url),
+              let currentHost = currentURL.host else { return nil }
+
+        // Check if any environment in this group could match
+        for env in group.environments {
+            if env.baseURL.host == currentHost {
+                return "\(env.emoji) \(env.name)"
+            }
+        }
+
+        // Also show if the group's source pattern matches the original host
+        if let origHost = originalHost, group.matches(host: origHost) {
+            if let active = group.activeEnvironment {
+                return "\(active.emoji) \(active.name)"
+            }
+            return "Available"
+        }
+
+        return nil
+    }
+
+    /// Check if the current URL matches a specific environment
+    private func isCurrentEnvironment(_ env: NetCheckerTrafficCore.Environment) -> Bool {
+        guard let currentURL = URL(string: url),
+              let currentHost = currentURL.host else { return false }
+
+        return env.baseURL.host == currentHost &&
+               (env.baseURL.port == currentURL.port || (env.baseURL.port == nil && currentURL.port == nil))
+    }
+
+    /// Switch the current URL to use a different environment's base URL
+    private func switchToEnvironment(_ env: NetCheckerTrafficCore.Environment, in group: EnvironmentGroup) {
+        guard let currentURL = URL(string: url) else { return }
+
+        var components = URLComponents(url: currentURL, resolvingAgainstBaseURL: false)
+
+        // Replace scheme, host, and port with the environment's values
+        components?.scheme = env.baseURL.scheme
+        components?.host = env.baseURL.host
+        components?.port = env.baseURL.port
+
+        if let newURL = components?.url {
+            url = newURL.absoluteString
         }
     }
 }

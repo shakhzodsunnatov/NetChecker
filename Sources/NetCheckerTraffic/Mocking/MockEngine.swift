@@ -14,16 +14,22 @@ public final class MockEngine: ObservableObject {
     @Published public private(set) var rules: [MockRule] = []
 
     /// Включен ли движок
-    @Published public var isEnabled: Bool = true
+    @Published public var isEnabled: Bool = false {
+        didSet {
+            saveEnabledState()
+        }
+    }
 
     // MARK: - Properties
 
     private let userDefaultsKey = "NetCheckerMockRules"
+    private let enabledKey = "NetCheckerMockEnabled"
 
     // MARK: - Initialization
 
     private init() {
         loadFromUserDefaults()
+        loadEnabledState()
     }
 
     // MARK: - Rule Management
@@ -133,6 +139,17 @@ public final class MockEngine: ObservableObject {
         }
         rules = decoded
         sortRules()
+    }
+
+    private func saveEnabledState() {
+        UserDefaults.standard.set(isEnabled, forKey: enabledKey)
+    }
+
+    private func loadEnabledState() {
+        // Only load if value was previously saved, otherwise use default (false)
+        if UserDefaults.standard.object(forKey: enabledKey) != nil {
+            isEnabled = UserDefaults.standard.bool(forKey: enabledKey)
+        }
     }
 }
 

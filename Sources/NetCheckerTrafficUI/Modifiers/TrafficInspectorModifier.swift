@@ -131,14 +131,20 @@ struct TrafficInspectorModifier: ViewModifier {
             }
         }
 
-        // Configure mock engine
-        Task { @MainActor in
-            MockEngine.shared.isEnabled = config.enableMocking
+        // Configure mock engine - only enable if explicitly requested
+        // Don't override user's persisted preference to disable
+        if config.enableMocking {
+            Task { @MainActor in
+                MockEngine.shared.isEnabled = true
+            }
         }
 
-        // Configure breakpoint engine
-        Task { @MainActor in
-            BreakpointEngine.shared.isEnabled = config.enableBreakpoints
+        // Configure breakpoint engine - only enable if explicitly requested
+        // Don't override user's persisted preference to disable
+        if config.enableBreakpoints {
+            Task { @MainActor in
+                BreakpointEngine.shared.isEnabled = true
+            }
         }
 
         // Add environment groups
