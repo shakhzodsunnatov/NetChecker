@@ -268,7 +268,7 @@ struct TrafficInspectorSheet: View {
             }
 
             NavigationStack {
-                SettingsView()
+                NetCheckerTrafficUI_BreakpointRulesView()
                     .toolbar {
                         ToolbarItem(placement: .cancellationAction) {
                             Button("Done") {
@@ -278,6 +278,21 @@ struct TrafficInspectorSheet: View {
                     }
             }
             .tag(3)
+            .tabItem {
+                Label("Breakpoints", systemImage: "hand.raised")
+            }
+
+            NavigationStack {
+                SettingsView()
+                    .toolbar {
+                        ToolbarItem(placement: .cancellationAction) {
+                            Button("Done") {
+                                dismiss()
+                            }
+                        }
+                    }
+            }
+            .tag(4)
             .tabItem {
                 Label("Settings", systemImage: "gear")
             }
