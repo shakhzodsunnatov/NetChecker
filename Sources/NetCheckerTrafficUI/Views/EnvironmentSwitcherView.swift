@@ -42,7 +42,11 @@ public struct NetCheckerTrafficUI_EnvironmentSwitcherView: View {
             // Environment groups
             ForEach(store.groups) { group in
                 Section {
-                    EnvironmentGroupView(group: group, selectedGroup: $selectedGroup)
+                    EnvironmentGroupView(
+                        group: group,
+                        selectedGroup: $selectedGroup,
+                        showingAddEnvironment: $showingAddEnvironment
+                    )
                 } header: {
                     HStack {
                         Text(group.name)
@@ -106,6 +110,7 @@ public struct NetCheckerTrafficUI_EnvironmentSwitcherView: View {
 struct EnvironmentGroupView: View {
     let group: EnvironmentGroup
     @Binding var selectedGroup: EnvironmentGroup?
+    @Binding var showingAddEnvironment: Bool
 
     @ObservedObject private var store = EnvironmentStore.shared
 
@@ -127,6 +132,7 @@ struct EnvironmentGroupView: View {
 
         Button {
             selectedGroup = group
+            showingAddEnvironment = true
         } label: {
             Label("Add Environment", systemImage: "plus")
                 .font(.subheadline)

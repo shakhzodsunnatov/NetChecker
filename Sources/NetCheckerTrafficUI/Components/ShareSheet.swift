@@ -178,22 +178,19 @@ public struct ExportMenuButton: View {
         var output = ""
 
         // Request Section
-        output += "═══════════════════════════════════════════════════════════════\n"
-        output += "                           REQUEST\n"
-        output += "═══════════════════════════════════════════════════════════════\n\n"
+        output += "══════ REQUEST ══════\n\n"
 
         // Method & URL
         output += "[\(record.method.rawValue)] \(record.url.absoluteString)\n\n"
 
         // Timestamp & Duration
         let dateFormatter = DateFormatter()
-        dateFormatter.dateFormat = "yyyy-MM-dd HH:mm:ss.SSS"
-        output += "Timestamp: \(dateFormatter.string(from: record.timestamp))\n"
-        output += "Duration: \(record.formattedDuration)\n\n"
+        dateFormatter.dateFormat = "yyyy-MM-dd HH:mm:ss"
+        output += "Time: \(dateFormatter.string(from: record.timestamp)) | \(record.formattedDuration)\n\n"
 
         // Request Headers
         if !record.request.headers.isEmpty {
-            output += "─── Request Headers ───\n"
+            output += "── Headers ──\n"
             for (key, value) in record.request.headers.sorted(by: { $0.key < $1.key }) {
                 output += "\(key): \(value)\n"
             }
@@ -202,29 +199,25 @@ public struct ExportMenuButton: View {
 
         // Request Body
         if let requestBody = record.request.bodyString, !requestBody.isEmpty {
-            output += "─── Request Body ───\n"
+            output += "── Body ──\n"
             output += formatJSONIfPossible(requestBody)
             output += "\n\n"
         }
 
         // Response Section
-        output += "═══════════════════════════════════════════════════════════════\n"
-        output += "                           RESPONSE\n"
-        output += "═══════════════════════════════════════════════════════════════\n\n"
+        output += "══════ RESPONSE ══════\n\n"
 
         if let response = record.response {
-            // Status
-            output += "Status: \(response.statusCode) \(HTTPURLResponse.localizedString(forStatusCode: response.statusCode))\n"
-
-            // Response Size
+            // Status & Size
+            output += "Status: \(response.statusCode)"
             if let bodySize = response.body?.count, bodySize > 0 {
-                output += "Size: \(formatBytes(bodySize))\n"
+                output += " | \(formatBytes(bodySize))"
             }
-            output += "\n"
+            output += "\n\n"
 
             // Response Headers
             if !response.headers.isEmpty {
-                output += "─── Response Headers ───\n"
+                output += "── Headers ──\n"
                 for (key, value) in response.headers.sorted(by: { $0.key < $1.key }) {
                     output += "\(key): \(value)\n"
                 }
@@ -233,7 +226,7 @@ public struct ExportMenuButton: View {
 
             // Response Body
             if let responseBody = response.bodyString, !responseBody.isEmpty {
-                output += "─── Response Body ───\n"
+                output += "── Body ──\n"
                 output += formatJSONIfPossible(responseBody)
                 output += "\n"
             }
@@ -242,16 +235,13 @@ public struct ExportMenuButton: View {
             case .pending:
                 output += "Status: Pending...\n"
             case .failed(let error):
-                output += "Status: Failed\n"
-                output += "Error: \(error)\n"
+                output += "Status: Failed\nError: \(error)\n"
             case .mocked:
-                output += "Status: Mocked (no response data)\n"
+                output += "Status: Mocked\n"
             default:
                 output += "Status: No response\n"
             }
         }
-
-        output += "\n═══════════════════════════════════════════════════════════════\n"
 
         shareText(output)
     }
