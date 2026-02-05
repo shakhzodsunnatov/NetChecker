@@ -325,7 +325,6 @@ extension NetCheckerURLProtocol: URLSessionDataDelegate {
 
         let host = challenge.protectionSpace.host
 
-        #if DEBUG
         switch config.trustMode {
         case .strict:
             completionHandler(.performDefaultHandling, nil)
@@ -372,10 +371,6 @@ extension NetCheckerURLProtocol: URLSessionDataDelegate {
                 completionHandler(.cancelAuthenticationChallenge, nil)
             }
         }
-        #else
-        // In Release, always use default handling
-        completionHandler(.performDefaultHandling, nil)
-        #endif
     }
 }
 

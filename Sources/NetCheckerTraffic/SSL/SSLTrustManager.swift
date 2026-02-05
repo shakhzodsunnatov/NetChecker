@@ -34,7 +34,6 @@ public final class SSLTrustManager: @unchecked Sendable {
         let mode = trustMode
         lock.unlock()
 
-        #if DEBUG
         switch mode {
         case .strict:
             return evaluateStrict(trust: trust)
@@ -69,9 +68,6 @@ public final class SSLTrustManager: @unchecked Sendable {
         case .custom(let handler):
             return handler(trust, host)
         }
-        #else
-        return evaluateStrict(trust: trust)
-        #endif
     }
 
     // MARK: - Evaluation Methods
