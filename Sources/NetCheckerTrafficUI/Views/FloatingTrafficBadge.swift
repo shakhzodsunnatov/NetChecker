@@ -93,7 +93,7 @@ public struct NetCheckerTrafficUI_FloatingTrafficBadge: View {
                         .font(.caption)
                         .foregroundColor(.secondary)
                     Spacer()
-                    Text("\(errorCount)")
+                    Text("\(store.errorCount)")
                         .font(.caption)
                         .foregroundColor(.red)
                 }
@@ -103,7 +103,7 @@ public struct NetCheckerTrafficUI_FloatingTrafficBadge: View {
                         .font(.caption)
                         .foregroundColor(.secondary)
                     Spacer()
-                    Text("\(pendingCount)")
+                    Text("\(store.pendingCount)")
                         .font(.caption)
                         .foregroundColor(.orange)
                 }
@@ -137,24 +137,16 @@ public struct NetCheckerTrafficUI_FloatingTrafficBadge: View {
     }
 
     private var statusColor: Color {
-        if pendingCount > 0 {
+        if store.pendingCount > 0 {
             return .orange
-        } else if errorCount > 0 {
+        } else if store.errorCount > 0 {
             return .red
         }
         return .green
     }
 
     private var successCount: Int {
-        store.records.filter { $0.statusCode?.isSuccessStatusCode == true }.count
-    }
-
-    private var errorCount: Int {
-        store.records.filter { $0.isError || ($0.statusCode?.isErrorStatusCode == true) }.count
-    }
-
-    private var pendingCount: Int {
-        store.records.filter { if case .pending = $0.state { return true }; return false }.count
+        store.count - store.errorCount - store.pendingCount
     }
 }
 
@@ -195,10 +187,11 @@ public struct TrafficIndicator: View {
         .padding(.vertical, 3)
         .background(Color.gray.opacity(0.15))
         .cornerRadius(10)
-        .onReceive(store.$records) { records in
+        .onReceive(store.$records.dropFirst().debounce(for: .milliseconds(300), scheduler: RunLoop.main)) { records in
             if let lastRecord = records.last,
                lastRecord.state == .completed,
-               let status = lastRecord.statusCode {
+               let status = lastRecord.statusCode,
+               status != lastRequestStatus {
                 lastRequestStatus = status
                 withAnimation {
                     showStatus = true
@@ -213,15 +206,11 @@ public struct TrafficIndicator: View {
     }
 
     private var hasPendingRequests: Bool {
-        store.records.contains { if case .pending = $0.state { return true }; return false }
+        store.pendingCount > 0
     }
 
     private var statusColor: Color {
-        let hasErrors = store.records.contains {
-            $0.isError || ($0.statusCode?.isErrorStatusCode == true)
-        }
-
-        if hasErrors {
+        if store.errorCount > 0 {
             return .red
         }
         return .green

@@ -123,8 +123,9 @@ struct PausedRequestRow: View {
 
                 Spacer()
 
-                Text(formatDuration(paused.pausedDuration))
+                Text("Paused")
                     .font(.caption2)
+                    .fontWeight(.medium)
                     .foregroundColor(.orange)
                     .padding(.horizontal, 6)
                     .padding(.vertical, 2)
@@ -168,12 +169,6 @@ struct PausedRequestRow: View {
         }
     }
 
-    private func formatDuration(_ duration: TimeInterval) -> String {
-        if duration < 1 {
-            return String(format: "%.0f ms", duration * 1000)
-        }
-        return String(format: "%.1f s", duration)
-    }
 }
 
 // MARK: - Paused Action Button

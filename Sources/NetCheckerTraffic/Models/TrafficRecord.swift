@@ -200,7 +200,7 @@ public struct TrafficRecord: Codable, Sendable, Identifiable, Hashable {
     /// Composite ID that includes state for SwiftUI diffing
     /// This ensures the row updates when the record state changes
     public var compositeId: String {
-        "\(id.uuidString)-\(state.hashValue)-\(statusCode ?? 0)"
+        "\(id.uuidString)-\(state.displayName)-\(statusCode ?? 0)"
     }
 
     /// Краткое описание для списка
