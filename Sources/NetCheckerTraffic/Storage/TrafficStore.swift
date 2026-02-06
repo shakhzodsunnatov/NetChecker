@@ -87,6 +87,9 @@ public final class TrafficStore: ObservableObject {
             return
         }
 
+        // Explicitly notify SwiftUI before changing
+        objectWillChange.send()
+
         records[index] = record
         updateCounts()
         onRecordUpdated?(record)
@@ -103,6 +106,10 @@ public final class TrafficStore: ObservableObject {
 
         var record = records[index]
         modifier(&record)
+
+        // Explicitly notify SwiftUI before changing
+        objectWillChange.send()
+
         records[index] = record
 
         updateCounts()

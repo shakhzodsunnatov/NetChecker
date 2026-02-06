@@ -146,7 +146,8 @@ public struct NetCheckerTrafficUI_TrafficListView: View {
 
     private var recordsList: some View {
         List {
-            ForEach(filteredRecords) { record in
+            // Use composite id to force SwiftUI to re-render row when state changes
+            ForEach(filteredRecords, id: \.compositeId) { record in
                 TrafficRecordRow(record: record)
                     .onTapGesture {
                         selectedRecord = record

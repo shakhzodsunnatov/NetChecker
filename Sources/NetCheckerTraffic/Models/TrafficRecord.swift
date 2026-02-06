@@ -197,6 +197,12 @@ public struct TrafficRecord: Codable, Sendable, Identifiable, Hashable {
         ByteCountFormatter.string(fromByteCount: responseSize, countStyle: .file)
     }
 
+    /// Composite ID that includes state for SwiftUI diffing
+    /// This ensures the row updates when the record state changes
+    public var compositeId: String {
+        "\(id.uuidString)-\(state.hashValue)-\(statusCode ?? 0)"
+    }
+
     /// Краткое описание для списка
     public var shortDescription: String {
         "\(method.rawValue) \(path)"

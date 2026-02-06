@@ -171,11 +171,18 @@ public final class NetCheckerURLProtocol: URLProtocol {
                     mutableRequest.httpBody = modifiedRequest.httpBody
                 } else {
                     // User cancelled - fail the request
-                    self.client?.urlProtocol(self, didFailWithError: NSError(
+                    let cancelError = NSError(
                         domain: NSURLErrorDomain,
                         code: NSURLErrorCancelled,
                         userInfo: [NSLocalizedDescriptionKey: "Request cancelled by breakpoint"]
-                    ))
+                    )
+
+                    // Update the traffic record to show as cancelled
+                    if let id = self.recordId {
+                        TrafficStore.shared.fail(id: id, error: cancelError)
+                    }
+
+                    self.client?.urlProtocol(self, didFailWithError: cancelError)
                     return
                 }
             }
