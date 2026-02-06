@@ -55,6 +55,32 @@ TrafficInterceptor.shared.start()
   <em>Shake Inspector • Menu Options • Edit & Retry • Traffic List • Request Details</em>
 </p>
 
+### 🎭 Mock Rules
+
+<p align="center">
+<!-- Add your mock rules screenshots here -->
+<!-- <img width="180" alt="Mock Rules List" src="YOUR_SCREENSHOT_URL" /> -->
+<!-- <img width="180" alt="Add Mock Rule" src="YOUR_SCREENSHOT_URL" /> -->
+<!-- <img width="180" alt="Edit Mock Rule" src="YOUR_SCREENSHOT_URL" /> -->
+</p>
+
+<p align="center">
+  <em>Mock Rules List • Add Mock Rule • Edit Mock Rule • Quick Presets</em>
+</p>
+
+### ⏸️ Breakpoints
+
+<p align="center">
+<!-- Add your breakpoints screenshots here -->
+<!-- <img width="180" alt="Breakpoints List" src="YOUR_SCREENSHOT_URL" /> -->
+<!-- <img width="180" alt="Paused Request" src="YOUR_SCREENSHOT_URL" /> -->
+<!-- <img width="180" alt="Edit Paused Request" src="YOUR_SCREENSHOT_URL" /> -->
+</p>
+
+<p align="center">
+  <em>Breakpoints List • Paused Request • Edit & Resume • Request Modification</em>
+</p>
+
 ---
 
 ## ✨ Features
@@ -529,9 +555,12 @@ ZStack {
 
 ## 🛡️ Best Practices
 
-### Debug Builds Only
+### Debug vs Release Builds
+
+NetChecker works in both Debug and Release builds (including TestFlight). You control when to enable it:
 
 ```swift
+// Option 1: Debug only (recommended for most apps)
 #if DEBUG
 import NetCheckerTraffic
 #endif
@@ -544,6 +573,19 @@ struct MyApp: App {
         #endif
     }
 }
+
+// Option 2: Enable in TestFlight for QA testing
+@main
+struct MyApp: App {
+    init() {
+        #if DEBUG || TESTFLIGHT
+        TrafficInterceptor.shared.start()
+        #endif
+    }
+}
+
+// Option 3: Always available (for internal/enterprise apps)
+TrafficInterceptor.shared.start()
 ```
 
 ### Performance Tips
