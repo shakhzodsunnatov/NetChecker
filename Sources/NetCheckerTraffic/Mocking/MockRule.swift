@@ -209,16 +209,21 @@ public struct MockResponse: Codable, Sendable {
     /// Задержка перед ответом
     public var delay: TimeInterval?
 
+    /// Override request body (for passthrough or recording)
+    public var requestBodyOverride: Data?
+
     public init(
         statusCode: Int = 200,
         headers: [String: String] = [:],
         body: Data? = nil,
-        delay: TimeInterval? = nil
+        delay: TimeInterval? = nil,
+        requestBodyOverride: Data? = nil
     ) {
         self.statusCode = statusCode
         self.headers = headers
         self.body = body
         self.delay = delay
+        self.requestBodyOverride = requestBodyOverride
     }
 
     // MARK: - Convenience Initializers
