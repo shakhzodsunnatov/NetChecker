@@ -2,6 +2,9 @@ import SwiftUI
 import NetCheckerTrafficCore
 import Combine
 
+/// NetChecker SDK Version
+public let NetCheckerVersion = "1.2.0"
+
 #if canImport(UIKit)
 import UIKit
 
@@ -406,7 +409,7 @@ struct SettingsView: View {
                 HStack {
                     Text("SDK Version")
                     Spacer()
-                    Text("1.0.0")
+                    Text(NetCheckerVersion)
                         .foregroundColor(.secondary)
                 }
 
