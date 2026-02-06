@@ -133,13 +133,13 @@ Add NetChecker to your project using Xcode:
    ```
    https://github.com/shakhzodsunnatov/NetChecker.git
    ```
-3. Select **Up to Next Major Version** with `1.0.0`
+3. Select **Up to Next Major Version** with `1.1.0`
 
 Or add it to your `Package.swift`:
 
 ```swift
 dependencies: [
-    .package(url: "https://github.com/shakhzodsunnatov/NetChecker.git", from: "1.0.0")
+    .package(url: "https://github.com/shakhzodsunnatov/NetChecker.git", from: "1.1.0")
 ]
 ```
 
