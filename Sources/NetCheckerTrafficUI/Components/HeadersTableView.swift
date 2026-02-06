@@ -157,6 +157,7 @@ struct HeaderRow: View {
 public struct EditableHeadersView: View {
     @Binding var headers: [String: String]
 
+    @State private var showingAddHeader = false
     @State private var newKey = ""
     @State private var newValue = ""
 
@@ -165,48 +166,49 @@ public struct EditableHeadersView: View {
     }
 
     public var body: some View {
-        VStack(spacing: 12) {
-            ForEach(Array(headers.keys.sorted()), id: \.self) { key in
-                HStack {
-                    TextField("Key", text: .constant(key))
-                        .textFieldStyle(.roundedBorder)
-                        .disabled(true)
-
-                    TextField("Value", text: Binding(
-                        get: { headers[key] ?? "" },
-                        set: { headers[key] = $0 }
-                    ))
-                    .textFieldStyle(.roundedBorder)
-
-                    Button {
-                        headers.removeValue(forKey: key)
-                    } label: {
-                        Image(systemName: "trash")
-                            .foregroundColor(.red)
-                    }
-                }
-            }
-
-            Divider()
-
+        ForEach(Array(headers.keys.sorted()), id: \.self) { key in
             HStack {
-                TextField("New key", text: $newKey)
-                    .textFieldStyle(.roundedBorder)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(key)
+                        .font(.system(.body, design: .monospaced))
+                        .fontWeight(.medium)
+                    Text(headers[key] ?? "")
+                        .font(.system(.caption, design: .monospaced))
+                        .foregroundColor(.secondary)
+                        .lineLimit(1)
+                }
 
-                TextField("New value", text: $newValue)
-                    .textFieldStyle(.roundedBorder)
+                Spacer()
 
                 Button {
-                    if !newKey.isEmpty {
-                        headers[newKey] = newValue
-                        newKey = ""
-                        newValue = ""
-                    }
+                    headers.removeValue(forKey: key)
                 } label: {
-                    Image(systemName: "plus.circle.fill")
-                        .foregroundColor(.green)
+                    Image(systemName: "trash")
+                        .font(.caption)
+                        .foregroundColor(.red)
                 }
-                .disabled(newKey.isEmpty)
+                .buttonStyle(.borderless)
+            }
+        }
+
+        Button {
+            showingAddHeader = true
+        } label: {
+            Label("Add Header", systemImage: "plus.circle")
+        }
+        .alert("Add Header", isPresented: $showingAddHeader) {
+            TextField("Header Name", text: $newKey)
+            TextField("Header Value", text: $newValue)
+            Button("Cancel", role: .cancel) {
+                newKey = ""
+                newValue = ""
+            }
+            Button("Add") {
+                if !newKey.isEmpty {
+                    headers[newKey] = newValue
+                    newKey = ""
+                    newValue = ""
+                }
             }
         }
     }

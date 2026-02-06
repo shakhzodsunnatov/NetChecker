@@ -113,7 +113,7 @@ struct PausedRequestRow: View {
     @State private var showingMockCreator = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 6) {
             HStack {
                 NetCheckerTrafficUI_MethodBadge(methodString: paused.method)
 
@@ -124,60 +124,35 @@ struct PausedRequestRow: View {
                 Spacer()
 
                 Text(formatDuration(paused.pausedDuration))
-                    .font(.caption)
+                    .font(.caption2)
                     .foregroundColor(.orange)
-                    .padding(.horizontal, 8)
+                    .padding(.horizontal, 6)
                     .padding(.vertical, 2)
-                    .background(Color.orange.opacity(0.15))
+                    .background(Color.orange.opacity(0.12))
                     .cornerRadius(4)
             }
 
             Text(paused.host)
-                .font(.caption)
+                .font(.caption2)
                 .foregroundColor(.secondary)
 
-            if let url = paused.url {
-                Text(url.absoluteString)
-                    .font(.caption2)
-                    .foregroundColor(.secondary)
-                    .lineLimit(2)
-            }
-
-            HStack(spacing: 8) {
-                Button {
+            // Compact action buttons - single row
+            HStack(spacing: 6) {
+                PausedActionButton(title: "Resume", icon: "play.fill", color: .green) {
                     engine.resume(id: paused.id, with: nil)
-                } label: {
-                    Label("Resume", systemImage: "play.fill")
-                        .font(.caption)
                 }
-                .buttonStyle(.borderedProminent)
 
-                Button {
+                PausedActionButton(title: "Edit", icon: "pencil", color: .blue) {
                     showingEditor = true
-                } label: {
-                    Label("Edit", systemImage: "pencil")
-                        .font(.caption)
                 }
-                .buttonStyle(.bordered)
 
-                Button {
+                PausedActionButton(title: "Mock", icon: "theatermasks", color: .purple) {
                     showingMockCreator = true
-                } label: {
-                    Label("Mock", systemImage: "theatermasks")
-                        .font(.caption)
                 }
-                .buttonStyle(.bordered)
-                .tint(.purple)
 
-                Spacer()
-
-                Button(role: .destructive) {
+                PausedActionButton(title: "Cancel", icon: "xmark", color: .red) {
                     engine.cancel(id: paused.id)
-                } label: {
-                    Image(systemName: "xmark")
-                        .font(.caption)
                 }
-                .buttonStyle(.bordered)
             }
         }
         .padding(.vertical, 4)
@@ -198,6 +173,33 @@ struct PausedRequestRow: View {
             return String(format: "%.0f ms", duration * 1000)
         }
         return String(format: "%.1f s", duration)
+    }
+}
+
+// MARK: - Paused Action Button
+
+private struct PausedActionButton: View {
+    let title: String
+    let icon: String
+    let color: Color
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 3) {
+                Image(systemName: icon)
+                    .font(.system(size: 9, weight: .semibold))
+                Text(title)
+                    .font(.system(size: 11, weight: .medium))
+            }
+            .foregroundColor(color)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 5)
+            .frame(maxWidth: .infinity)
+            .background(color.opacity(0.12))
+            .cornerRadius(6)
+        }
+        .buttonStyle(.plain)
     }
 }
 
