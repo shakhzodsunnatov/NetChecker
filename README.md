@@ -58,23 +58,22 @@ TrafficInterceptor.shared.start()
 ### 🎭 Mock Rules
 
 <p align="center">
-<!-- Add your mock rules screenshots here -->
-<!-- <img width="180" alt="Mock Rules List" src="YOUR_SCREENSHOT_URL" /> -->
-<!-- <img width="180" alt="Add Mock Rule" src="YOUR_SCREENSHOT_URL" /> -->
-<!-- <img width="180" alt="Edit Mock Rule" src="YOUR_SCREENSHOT_URL" /> -->
+<img width="180" alt="Mock Rules List" src="https://github.com/user-attachments/assets/f5022f7a-b304-45ef-ba3f-fbc51a52b8d7" />
+<img width="180" alt="Edit Mock Rule" src="https://github.com/user-attachments/assets/a2b32b58-54be-4931-8288-facfdc4f75d6" />
+<img width="180" alt="Create Mock Rule" src="https://github.com/user-attachments/assets/3b249884-3f3d-4ab3-b709-5d276a17abc8" />
 </p>
 
 <p align="center">
-  <em>Mock Rules List • Add Mock Rule • Edit Mock Rule • Quick Presets</em>
+  <em>Mock Rules List • Edit Mock Rule • Create Mock Rule</em>
 </p>
 
 ### ⏸️ Breakpoints
 
 <p align="center">
-<!-- Add your breakpoints screenshots here -->
-<!-- <img width="180" alt="Breakpoints List" src="YOUR_SCREENSHOT_URL" /> -->
-<!-- <img width="180" alt="Paused Request" src="YOUR_SCREENSHOT_URL" /> -->
-<!-- <img width="180" alt="Edit Paused Request" src="YOUR_SCREENSHOT_URL" /> -->
+<img width="180" alt="IMG_1889" src="https://github.com/user-attachments/assets/c8aa0613-322c-45e0-8a48-55be34dd9800" />
+<img width="180" alt="IMG_1892" src="https://github.com/user-attachments/assets/9121c223-9266-49c5-af35-3f093fe686f2" />
+<img width="180" alt="IMG_1893" src="https://github.com/user-attachments/assets/0bbabaec-2c26-4bd5-8815-226c264eb618" />
+<img width="180" alt="Screenshot" src="https://github.com/user-attachments/assets/e7ea3d7f-39d1-460a-876d-1f820a2238ad" />
 </p>
 
 <p align="center">
