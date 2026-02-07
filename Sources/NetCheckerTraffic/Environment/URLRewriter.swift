@@ -1,8 +1,8 @@
 import Foundation
 
-/// Переписывание URL для переключения окружений
+/// URL rewriting utilities for environment switching
 public struct URLRewriter {
-    /// Переписать URL согласно правилу
+    /// Rewrite URL according to rule
     public static func rewrite(
         url: URL,
         from sourcePattern: String,
@@ -26,14 +26,14 @@ public struct URLRewriter {
         return components?.url
     }
 
-    /// Переписать только хост
+    /// Rewrite only the host
     public static func rewriteHost(url: URL, to newHost: String) -> URL? {
         var components = URLComponents(url: url, resolvingAgainstBaseURL: false)
         components?.host = newHost
         return components?.url
     }
 
-    /// Переписать хост и порт
+    /// Rewrite host and port
     public static func rewriteHostAndPort(url: URL, to newHost: String, port: Int?) -> URL? {
         var components = URLComponents(url: url, resolvingAgainstBaseURL: false)
         components?.host = newHost
@@ -41,14 +41,14 @@ public struct URLRewriter {
         return components?.url
     }
 
-    /// Переписать схему
+    /// Rewrite scheme
     public static func rewriteScheme(url: URL, to newScheme: String) -> URL? {
         var components = URLComponents(url: url, resolvingAgainstBaseURL: false)
         components?.scheme = newScheme
         return components?.url
     }
 
-    /// Переписать путь
+    /// Rewrite path prefix
     public static func rewritePath(url: URL, from oldPath: String, to newPath: String) -> URL? {
         var components = URLComponents(url: url, resolvingAgainstBaseURL: false)
 
@@ -61,7 +61,7 @@ public struct URLRewriter {
         return components?.url
     }
 
-    /// Проверить соответствие URL паттерну
+    /// Check if URL matches pattern
     public static func matches(url: URL, pattern: String) -> Bool {
         guard let host = url.host else { return false }
 
@@ -85,7 +85,7 @@ public struct URLRewriter {
             return hostLower.hasPrefix(prefix)
         }
 
-        // Regex pattern
+        // Regex pattern with wildcards
         if patternLower.contains("*") {
             let regexPattern = patternLower
                 .replacingOccurrences(of: ".", with: "\\.")
@@ -100,7 +100,7 @@ public struct URLRewriter {
         return false
     }
 
-    /// Построить URL из компонентов
+    /// Build URL from components
     public static func buildURL(
         scheme: String = "https",
         host: String,
@@ -115,5 +115,41 @@ public struct URLRewriter {
         components.path = path
         components.queryItems = queryItems
         return components.url
+    }
+
+    /// Apply environment headers to request
+    public static func applyHeaders(
+        _ environmentHeaders: [String: String],
+        to request: inout URLRequest,
+        overwrite: Bool = true
+    ) {
+        for (key, value) in environmentHeaders {
+            if overwrite {
+                request.setValue(value, forHTTPHeaderField: key)
+            } else {
+                // Only set if not already present
+                if request.value(forHTTPHeaderField: key) == nil {
+                    request.setValue(value, forHTTPHeaderField: key)
+                }
+            }
+        }
+    }
+
+    /// Apply environment headers to mutable request
+    public static func applyHeaders(
+        _ environmentHeaders: [String: String],
+        to request: NSMutableURLRequest,
+        overwrite: Bool = true
+    ) {
+        for (key, value) in environmentHeaders {
+            if overwrite {
+                request.setValue(value, forHTTPHeaderField: key)
+            } else {
+                // Only set if not already present
+                if request.value(forHTTPHeaderField: key) == nil {
+                    request.setValue(value, forHTTPHeaderField: key)
+                }
+            }
+        }
     }
 }

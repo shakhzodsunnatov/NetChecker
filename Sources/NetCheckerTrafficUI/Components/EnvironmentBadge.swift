@@ -50,6 +50,10 @@ public struct EnvironmentIndicator: View {
                     .font(.caption2)
                     .foregroundColor(.secondary)
             }
+        } else {
+            Text("No Environment")
+                .font(.caption2)
+                .foregroundColor(.secondary)
         }
     }
 }
@@ -88,6 +92,10 @@ public struct EnvironmentPickerView: View {
                         .foregroundColor(.secondary)
                 }
             }
+        } else {
+            Text("No matching group")
+                .font(.caption)
+                .foregroundColor(.secondary)
         }
     }
 }
@@ -102,44 +110,89 @@ public struct QuickEnvironmentToggle: View {
     }
 
     public var body: some View {
-        HStack(spacing: 8) {
-            ForEach(group.environments) { env in
-                Button {
-                    store.switchEnvironment(groupId: group.id, to: env.id)
-                } label: {
-                    let isActive = group.activeEnvironmentId == env.id
-                    VStack(spacing: 2) {
-                        Text(env.emoji)
-                            .font(.title3)
-                        Text(env.name)
-                            .font(.caption2)
+        if group.environments.isEmpty {
+            Text("No environments configured")
+                .font(.caption)
+                .foregroundColor(.secondary)
+        } else {
+            HStack(spacing: 8) {
+                ForEach(group.environments) { env in
+                    Button {
+                        store.switchEnvironment(groupId: group.id, to: env.id)
+                    } label: {
+                        let isActive = group.activeEnvironmentId == env.id
+                        VStack(spacing: 2) {
+                            Text(env.emoji)
+                                .font(.title3)
+                            Text(env.name)
+                                .font(.caption2)
+                        }
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 8)
+                        .background(
+                            isActive
+                                ? inferEnvironmentColor(from: env.name).opacity(0.2)
+                                : Color.gray.opacity(0.15)
+                        )
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 8)
+                                .stroke(
+                                    isActive
+                                        ? inferEnvironmentColor(from: env.name)
+                                        : Color.clear,
+                                    lineWidth: 2
+                                )
+                        )
+                        .cornerRadius(8)
                     }
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 8)
-                    .background(
-                        isActive
-                            ? inferEnvironmentColor(from: env.name).opacity(0.2)
-                            : Color.gray.opacity(0.15)
-                    )
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 8)
-                            .stroke(
-                                isActive
-                                    ? inferEnvironmentColor(from: env.name)
-                                    : Color.clear,
-                                lineWidth: 2
-                            )
-                    )
-                    .cornerRadius(8)
+                    .buttonStyle(.plain)
                 }
-                .buttonStyle(.plain)
             }
         }
     }
 }
 
+/// Active environment banner for traffic list
+public struct ActiveEnvironmentBanner: View {
+    @ObservedObject private var store = EnvironmentStore.shared
+
+    public init() {}
+
+    public var body: some View {
+        if let activeEnv = store.activeEnvironment, !activeEnv.isDefault {
+            HStack {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .foregroundColor(.orange)
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Non-Production Environment Active")
+                        .font(.caption)
+                        .fontWeight(.medium)
+
+                    Text("\(activeEnv.emoji) \(activeEnv.name) - \(activeEnv.host)")
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                }
+
+                Spacer()
+
+                Button {
+                    store.resetToProduction()
+                } label: {
+                    Text("Reset")
+                        .font(.caption)
+                }
+                .buttonStyle(.bordered)
+            }
+            .padding(.horizontal)
+            .padding(.vertical, 8)
+            .background(Color.orange.opacity(0.1))
+        }
+    }
+}
+
 /// Infer environment color from name
-private func inferEnvironmentColor(from name: String) -> Color {
+func inferEnvironmentColor(from name: String) -> Color {
     let lowercased = name.lowercased()
     if lowercased.contains("prod") {
         return TrafficTheme.productionColor
@@ -179,6 +232,10 @@ private func inferEnvironmentColor(from name: String) -> Color {
                 baseURL: URL(string: "http://localhost:8080")!
             )
         )
+
+        EnvironmentIndicator()
+
+        ActiveEnvironmentBanner()
     }
     .padding()
 }

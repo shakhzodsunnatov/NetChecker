@@ -214,6 +214,109 @@ public struct EditableHeadersView: View {
     }
 }
 
+// MARK: - Header Presets
+
+/// Common header presets for easy configuration
+public struct HeaderPresets {
+    public static let commonHeaders: [(name: String, key: String, placeholder: String)] = [
+        ("Authorization", "Authorization", "Bearer <token>"),
+        ("Content-Type", "Content-Type", "application/json"),
+        ("Accept", "Accept", "application/json"),
+        ("API Key", "X-API-Key", "<api-key>"),
+        ("User Agent", "User-Agent", "MyApp/1.0"),
+        ("Accept-Language", "Accept-Language", "en-US"),
+    ]
+}
+
+/// View for adding headers from presets
+public struct HeaderPresetsView: View {
+    @Binding var headers: [String: String]
+    @SwiftUI.Environment(\.dismiss) private var dismiss
+
+    @State private var selectedPreset: (name: String, key: String, placeholder: String)?
+    @State private var customValue = ""
+
+    public init(headers: Binding<[String: String]>) {
+        self._headers = headers
+    }
+
+    public var body: some View {
+        NavigationStack {
+            List {
+                Section("Common Headers") {
+                    ForEach(HeaderPresets.commonHeaders, id: \.key) { preset in
+                        Button {
+                            selectedPreset = preset
+                            customValue = headers[preset.key] ?? ""
+                        } label: {
+                            HStack {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(preset.name)
+                                        .font(.subheadline)
+                                        .foregroundColor(.primary)
+                                    Text(preset.key)
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                }
+
+                                Spacer()
+
+                                if headers[preset.key] != nil {
+                                    Image(systemName: "checkmark.circle.fill")
+                                        .foregroundColor(.green)
+                                }
+                            }
+                        }
+                    }
+                }
+
+                if let preset = selectedPreset {
+                    Section("Set Value for \(preset.name)") {
+                        TextField(preset.placeholder, text: $customValue)
+                            .font(.system(.body, design: .monospaced))
+                            #if os(iOS)
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
+                            #endif
+
+                        HStack {
+                            Button("Remove") {
+                                headers.removeValue(forKey: preset.key)
+                                selectedPreset = nil
+                                customValue = ""
+                            }
+                            .foregroundColor(.red)
+                            .disabled(headers[preset.key] == nil)
+
+                            Spacer()
+
+                            Button("Apply") {
+                                if !customValue.isEmpty {
+                                    headers[preset.key] = customValue
+                                }
+                                selectedPreset = nil
+                                customValue = ""
+                            }
+                            .disabled(customValue.isEmpty)
+                        }
+                    }
+                }
+            }
+            .navigationTitle("Header Presets")
+            #if os(iOS)
+            .navigationBarTitleDisplayMode(.inline)
+            #endif
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") {
+                        dismiss()
+                    }
+                }
+            }
+        }
+    }
+}
+
 #Preview {
     ScrollView {
         NetCheckerTrafficUI_HeadersTableView(
