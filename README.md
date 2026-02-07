@@ -55,6 +55,31 @@ TrafficInterceptor.shared.start()
   <em>Shake Inspector • Menu Options • Edit & Retry • Traffic List • Request Details</em>
 </p>
 
+### 🎭 Mock Rules
+
+<p align="center">
+<img width="180" alt="Mock Rules List" src="https://github.com/user-attachments/assets/f5022f7a-b304-45ef-ba3f-fbc51a52b8d7" />
+<img width="180" alt="Edit Mock Rule" src="https://github.com/user-attachments/assets/a2b32b58-54be-4931-8288-facfdc4f75d6" />
+<img width="180" alt="Create Mock Rule" src="https://github.com/user-attachments/assets/3b249884-3f3d-4ab3-b709-5d276a17abc8" />
+</p>
+
+<p align="center">
+  <em>Mock Rules List • Edit Mock Rule • Create Mock Rule</em>
+</p>
+
+### ⏸️ Breakpoints
+
+<p align="center">
+<img width="180" alt="IMG_1889" src="https://github.com/user-attachments/assets/c8aa0613-322c-45e0-8a48-55be34dd9800" />
+<img width="180" alt="IMG_1892" src="https://github.com/user-attachments/assets/9121c223-9266-49c5-af35-3f093fe686f2" />
+<img width="180" alt="IMG_1893" src="https://github.com/user-attachments/assets/0bbabaec-2c26-4bd5-8815-226c264eb618" />
+<img width="180" alt="Screenshot" src="https://github.com/user-attachments/assets/e7ea3d7f-39d1-460a-876d-1f820a2238ad" />
+</p>
+
+<p align="center">
+  <em>Breakpoints List • Paused Request • Edit & Resume • Request Modification</em>
+</p>
+
 ---
 
 ## ✨ Features
@@ -97,7 +122,7 @@ Pause, inspect, and modify requests in real-time:
 - Change URL endpoints
 - Auto-resume with timeout
 
-### 🌍 Environment Switching
+### 🌍 Environment Switching <sup><kbd>Coming Soon</kbd></sup>
 Switch between environments instantly:
 - Dev / Staging / Production
 - Quick URL overrides
@@ -133,13 +158,13 @@ Add NetChecker to your project using Xcode:
    ```
    https://github.com/shakhzodsunnatov/NetChecker.git
    ```
-3. Select **Up to Next Major Version** with `1.1.0`
+3. Select **Up to Next Major Version** with `1.2.0`
 
 Or add it to your `Package.swift`:
 
 ```swift
 dependencies: [
-    .package(url: "https://github.com/shakhzodsunnatov/NetChecker.git", from: "1.1.0")
+    .package(url: "https://github.com/shakhzodsunnatov/NetChecker.git", from: "1.2.0")
 ]
 ```
 
@@ -385,7 +410,9 @@ ForEach(breakpointEngine.pausedRequests) { paused in
 
 ---
 
-### 🌍 Environment Management
+### 🌍 Environment Management <sup><kbd>Coming Soon</kbd></sup>
+
+> **Note:** Environment switching UI is under development. The API is ready and functional, but the UI tab is temporarily disabled.
 
 Switch between environments without rebuilding:
 
@@ -508,7 +535,7 @@ if let harData = HARFormatter.format(records: records) {
 | `TrafficStatisticsView` | Visual statistics dashboard |
 | `WaterfallChartView` | Performance timing visualization |
 | `SSLDashboardView` | SSL/TLS security overview |
-| `EnvironmentSwitcherView` | Environment management UI |
+| `EnvironmentSwitcherView` | Environment management UI *(Coming Soon)* |
 | `MockRulesView` | Manage mock rules |
 | `BreakpointRulesView` | Manage breakpoints |
 
@@ -529,9 +556,12 @@ ZStack {
 
 ## 🛡️ Best Practices
 
-### Debug Builds Only
+### Debug vs Release Builds
+
+NetChecker works in both Debug and Release builds (including TestFlight). You control when to enable it:
 
 ```swift
+// Option 1: Debug only (recommended for most apps)
 #if DEBUG
 import NetCheckerTraffic
 #endif
@@ -544,6 +574,19 @@ struct MyApp: App {
         #endif
     }
 }
+
+// Option 2: Enable in TestFlight for QA testing
+@main
+struct MyApp: App {
+    init() {
+        #if DEBUG || TESTFLIGHT
+        TrafficInterceptor.shared.start()
+        #endif
+    }
+}
+
+// Option 3: Always available (for internal/enterprise apps)
+TrafficInterceptor.shared.start()
 ```
 
 ### Performance Tips

@@ -1,7 +1,7 @@
 import Foundation
 import Combine
 
-/// Property wrapper для переменных окружения
+/// Property wrapper for environment variables
 @propertyWrapper
 public struct EnvironmentVariable: Sendable {
     private let key: String
@@ -20,7 +20,7 @@ public struct EnvironmentVariable: Sendable {
     }
 }
 
-/// Property wrapper для опциональных переменных
+/// Property wrapper for optional environment variables
 @propertyWrapper
 public struct OptionalEnvironmentVariable: Sendable {
     private let key: String
@@ -36,8 +36,9 @@ public struct OptionalEnvironmentVariable: Sendable {
     }
 }
 
-/// Property wrapper с проекцией на Publisher
+/// Property wrapper with Publisher projection for reactive updates
 @propertyWrapper
+@MainActor
 public final class ReactiveEnvironmentVariable: ObservableObject {
     private let key: String
     private let defaultValue: String
@@ -52,33 +53,28 @@ public final class ReactiveEnvironmentVariable: ObservableObject {
     public init(_ key: String, default defaultValue: String = "") {
         self.key = key
         self.defaultValue = defaultValue
-        self.wrappedValue = defaultValue
+        self.wrappedValue = EnvironmentStore.shared.variable(key) ?? defaultValue
 
         // Observe store changes
-        Task { @MainActor in
-            self.wrappedValue = EnvironmentStore.shared.variable(key) ?? defaultValue
-
-            self.cancellable = EnvironmentStore.shared.$groups
-                .map { [key, defaultValue] _ in
-                    EnvironmentStore.shared.variable(key) ?? defaultValue
-                }
-                .assign(to: \.wrappedValue, on: self)
-        }
+        self.cancellable = EnvironmentStore.shared.$groups
+            .map { [key, defaultValue] _ in
+                EnvironmentStore.shared.variable(key) ?? defaultValue
+            }
+            .removeDuplicates()
+            .assign(to: \.wrappedValue, on: self)
     }
 }
 
 // MARK: - Convenience Functions
 
-/// Получить переменную окружения
+/// Get environment variable value
+@MainActor
 public func env(_ key: String) -> String? {
-    MainActor.assumeIsolated {
-        EnvironmentStore.shared.variable(key)
-    }
+    EnvironmentStore.shared.variable(key)
 }
 
-/// Получить переменную окружения с default
+/// Get environment variable value with default
+@MainActor
 public func env(_ key: String, default defaultValue: String) -> String {
-    MainActor.assumeIsolated {
-        EnvironmentStore.shared.variable(key) ?? defaultValue
-    }
+    EnvironmentStore.shared.variable(key) ?? defaultValue
 }

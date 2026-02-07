@@ -1,15 +1,6 @@
 import SwiftUI
 import NetCheckerTrafficCore
 
-/// Preset types for environment configuration
-enum EnvironmentPreset: String, CaseIterable {
-    case production
-    case staging
-    case development
-    case local
-    case custom
-}
-
 /// View for adding a new environment
 public struct NetCheckerTrafficUI_AddEnvironmentView: View {
     let group: EnvironmentGroup
@@ -20,9 +11,15 @@ public struct NetCheckerTrafficUI_AddEnvironmentView: View {
     @State private var name = ""
     @State private var emoji = "🌐"
     @State private var baseURL = ""
-    @State private var selectedPreset: EnvironmentPreset = .development
+    @State private var selectedPreset: EnvironmentPresetType = .development
     @State private var headers: [String: String] = [:]
+    @State private var variables: [String: String] = [:]
+    @State private var sslMode: EnvironmentSSLMode = .strict
+    @State private var isDefault = false
+    @State private var notes = ""
+
     @State private var showingEmojiPicker = false
+    @State private var showingHeaderPresets = false
 
     public init(group: EnvironmentGroup) {
         self.group = group
@@ -30,7 +27,7 @@ public struct NetCheckerTrafficUI_AddEnvironmentView: View {
 
     public var body: some View {
         Form {
-            // Basic info
+            // Basic info section
             Section("Basic Info") {
                 HStack {
                     Button {
@@ -45,13 +42,18 @@ public struct NetCheckerTrafficUI_AddEnvironmentView: View {
                 }
 
                 Picker("Type", selection: $selectedPreset) {
-                    ForEach(EnvironmentPreset.allCases, id: \.self) { preset in
-                        Text(preset.rawValue.capitalized).tag(preset)
+                    ForEach(EnvironmentPresetType.allCases, id: \.self) { preset in
+                        Text(preset.displayName).tag(preset)
                     }
                 }
+                .onChange(of: selectedPreset) { newValue in
+                    applyPreset(newValue)
+                }
+
+                Toggle("Default Environment", isOn: $isDefault)
             }
 
-            // URL Configuration
+            // URL Configuration section
             Section {
                 #if os(iOS)
                 TextField("Base URL", text: $baseURL)
@@ -63,44 +65,92 @@ public struct NetCheckerTrafficUI_AddEnvironmentView: View {
                     .autocorrectionDisabled()
                 #endif
             } header: {
-                Text("URL")
+                Text("Base URL")
             } footer: {
-                Text("e.g., https://staging.api.example.com")
+                if !baseURL.isEmpty && !isValidURL {
+                    Text("Please enter a valid URL")
+                        .foregroundColor(.red)
+                } else {
+                    Text("e.g., https://staging.api.example.com")
+                }
             }
 
-            // Headers
-            Section("Custom Headers") {
+            // SSL Mode section
+            Section("SSL Trust Mode") {
+                Picker("SSL Mode", selection: $sslMode) {
+                    ForEach(EnvironmentSSLMode.allCases, id: \.self) { mode in
+                        Text(mode.displayName).tag(mode)
+                    }
+                }
+                .pickerStyle(.menu)
+
+                Text(sslMode.description)
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+
+            // Headers section
+            Section {
                 EditableHeadersView(headers: $headers)
+
+                Button {
+                    showingHeaderPresets = true
+                } label: {
+                    Label("Add from Presets", systemImage: "list.bullet")
+                }
+            } header: {
+                HStack {
+                    Text("Headers")
+                    Spacer()
+                    if !headers.isEmpty {
+                        Text("\(headers.count)")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                }
+            } footer: {
+                Text("Headers will be added to all requests when this environment is active")
             }
 
-            // Presets
+            // Variables section
+            Section {
+                EditableVariablesView(variables: $variables)
+            } header: {
+                Text("Variables")
+            } footer: {
+                Text("Access via env(\"key\") in your code")
+            }
+
+            // Notes section
+            Section("Notes") {
+                TextEditor(text: $notes)
+                    .frame(minHeight: 60)
+            }
+
+            // Quick Setup section
             Section("Quick Setup") {
-                Button {
-                    setupPreset(.production)
-                } label: {
-                    Label("Production", systemImage: "flame")
-                }
-
-                Button {
-                    setupPreset(.staging)
-                } label: {
-                    Label("Staging", systemImage: "hammer")
-                }
-
-                Button {
-                    setupPreset(.development)
-                } label: {
-                    Label("Development", systemImage: "wrench")
-                }
-
-                Button {
-                    setupPreset(.local)
-                } label: {
-                    Label("Local", systemImage: "laptopcomputer")
+                ForEach(EnvironmentPresetType.allCases, id: \.self) { preset in
+                    Button {
+                        applyPreset(preset)
+                    } label: {
+                        HStack {
+                            Text(preset.defaultEmoji)
+                            Text(preset.displayName)
+                            Spacer()
+                            if selectedPreset == preset {
+                                Image(systemName: "checkmark")
+                                    .foregroundColor(.accentColor)
+                            }
+                        }
+                    }
+                    .foregroundColor(.primary)
                 }
             }
         }
         .navigationTitle("Add Environment")
+        #if os(iOS)
+        .navigationBarTitleDisplayMode(.inline)
+        #endif
         .toolbar {
             ToolbarItem(placement: .cancellationAction) {
                 Button("Cancel") {
@@ -118,32 +168,47 @@ public struct NetCheckerTrafficUI_AddEnvironmentView: View {
         .sheet(isPresented: $showingEmojiPicker) {
             EmojiPickerView(selectedEmoji: $emoji)
         }
+        .sheet(isPresented: $showingHeaderPresets) {
+            HeaderPresetsView(headers: $headers)
+        }
+        .onAppear {
+            // Apply default preset
+            applyPreset(.development)
+        }
+    }
+
+    private var isValidURL: Bool {
+        URL(string: baseURL) != nil
     }
 
     private var isValid: Bool {
-        !name.isEmpty && !baseURL.isEmpty && URL(string: baseURL) != nil
+        !name.isEmpty && !baseURL.isEmpty && isValidURL
     }
 
-    private func setupPreset(_ preset: EnvironmentPreset) {
+    private func applyPreset(_ preset: EnvironmentPresetType) {
         selectedPreset = preset
+        emoji = preset.defaultEmoji
+        sslMode = preset.defaultSSLMode
 
         switch preset {
         case .production:
             name = "Production"
-            emoji = "🚀"
+            isDefault = true
         case .staging:
             name = "Staging"
-            emoji = "🔧"
+            isDefault = false
         case .development:
             name = "Development"
-            emoji = "💻"
+            isDefault = false
         case .local:
             name = "Local"
-            emoji = "🏠"
-            baseURL = "http://localhost:8080"
+            if baseURL.isEmpty {
+                baseURL = "http://localhost:8080"
+            }
+            isDefault = false
         case .custom:
             name = "Custom"
-            emoji = "⚙️"
+            isDefault = false
         }
     }
 
@@ -154,7 +219,11 @@ public struct NetCheckerTrafficUI_AddEnvironmentView: View {
             name: name,
             emoji: emoji,
             baseURL: url,
-            headers: headers
+            headers: headers,
+            sslTrustMode: sslMode,
+            isDefault: isDefault,
+            variables: variables,
+            notes: notes.isEmpty ? nil : notes
         )
 
         store.addEnvironment(environment, to: group.id)
@@ -171,7 +240,8 @@ struct EmojiPickerView: View {
     private let environmentEmojis = [
         "🚀", "🔧", "💻", "🏠", "⚙️", "🌐",
         "🔥", "⭐️", "🎯", "📦", "🛠️", "🔬",
-        "🧪", "🔒", "🌍", "☁️", "💾", "📱"
+        "🧪", "🔒", "🌍", "☁️", "💾", "📱",
+        "🟢", "🟡", "🔴", "🟠", "🔵", "🟣"
     ]
 
     var body: some View {

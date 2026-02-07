@@ -140,9 +140,17 @@ public final class NetCheckerURLProtocol: URLProtocol {
         Task { @MainActor [weak self] in
             guard let self = self else { return }
 
-            // Apply environment URL rewriting
-            if let rewrittenURL = EnvironmentStore.shared.rewriteURL(mutableRequest.url) {
+            // Apply environment URL rewriting and headers
+            let rewriteResult = EnvironmentStore.shared.rewrite(mutableRequest.url)
+
+            // Apply rewritten URL if different
+            if let rewrittenURL = rewriteResult.url {
                 mutableRequest.url = rewrittenURL
+            }
+
+            // Apply environment headers (environment headers override existing ones)
+            if !rewriteResult.headers.isEmpty {
+                URLRewriter.applyHeaders(rewriteResult.headers, to: mutableRequest, overwrite: true)
             }
 
             TrafficStore.shared.add(record)
@@ -171,11 +179,18 @@ public final class NetCheckerURLProtocol: URLProtocol {
                     mutableRequest.httpBody = modifiedRequest.httpBody
                 } else {
                     // User cancelled - fail the request
-                    self.client?.urlProtocol(self, didFailWithError: NSError(
+                    let cancelError = NSError(
                         domain: NSURLErrorDomain,
                         code: NSURLErrorCancelled,
                         userInfo: [NSLocalizedDescriptionKey: "Request cancelled by breakpoint"]
-                    ))
+                    )
+
+                    // Update the traffic record to show as cancelled
+                    if let id = self.recordId {
+                        TrafficStore.shared.fail(id: id, error: cancelError)
+                    }
+
+                    self.client?.urlProtocol(self, didFailWithError: cancelError)
                     return
                 }
             }

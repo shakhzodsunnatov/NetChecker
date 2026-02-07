@@ -173,12 +173,16 @@ public final class TrafficInterceptor: ObservableObject {
     // MARK: - Private Methods
 
     private func setupObservers() {
-        TrafficStore.shared.$count
+        TrafficStore.shared.$records
             .receive(on: DispatchQueue.main)
+            .map(\.count)
+            .removeDuplicates()
             .assign(to: &$requestCount)
 
-        TrafficStore.shared.$errorCount
+        TrafficStore.shared.$records
             .receive(on: DispatchQueue.main)
+            .map { $0.filter { $0.isError }.count }
+            .removeDuplicates()
             .assign(to: &$errorCount)
     }
 }

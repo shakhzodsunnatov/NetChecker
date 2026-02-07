@@ -113,7 +113,7 @@ struct PausedRequestRow: View {
     @State private var showingMockCreator = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 6) {
             HStack {
                 NetCheckerTrafficUI_MethodBadge(methodString: paused.method)
 
@@ -123,61 +123,37 @@ struct PausedRequestRow: View {
 
                 Spacer()
 
-                Text(formatDuration(paused.pausedDuration))
-                    .font(.caption)
+                Text("Paused")
+                    .font(.caption2)
+                    .fontWeight(.medium)
                     .foregroundColor(.orange)
-                    .padding(.horizontal, 8)
+                    .padding(.horizontal, 6)
                     .padding(.vertical, 2)
-                    .background(Color.orange.opacity(0.15))
+                    .background(Color.orange.opacity(0.12))
                     .cornerRadius(4)
             }
 
             Text(paused.host)
-                .font(.caption)
+                .font(.caption2)
                 .foregroundColor(.secondary)
 
-            if let url = paused.url {
-                Text(url.absoluteString)
-                    .font(.caption2)
-                    .foregroundColor(.secondary)
-                    .lineLimit(2)
-            }
-
-            HStack(spacing: 8) {
-                Button {
+            // Compact action buttons - single row
+            HStack(spacing: 6) {
+                PausedActionButton(title: "Resume", icon: "play.fill", color: .green) {
                     engine.resume(id: paused.id, with: nil)
-                } label: {
-                    Label("Resume", systemImage: "play.fill")
-                        .font(.caption)
                 }
-                .buttonStyle(.borderedProminent)
 
-                Button {
+                PausedActionButton(title: "Edit", icon: "pencil", color: .blue) {
                     showingEditor = true
-                } label: {
-                    Label("Edit", systemImage: "pencil")
-                        .font(.caption)
                 }
-                .buttonStyle(.bordered)
 
-                Button {
+                PausedActionButton(title: "Mock", icon: "theatermasks", color: .purple) {
                     showingMockCreator = true
-                } label: {
-                    Label("Mock", systemImage: "theatermasks")
-                        .font(.caption)
                 }
-                .buttonStyle(.bordered)
-                .tint(.purple)
 
-                Spacer()
-
-                Button(role: .destructive) {
+                PausedActionButton(title: "Cancel", icon: "xmark", color: .red) {
                     engine.cancel(id: paused.id)
-                } label: {
-                    Image(systemName: "xmark")
-                        .font(.caption)
                 }
-                .buttonStyle(.bordered)
             }
         }
         .padding(.vertical, 4)
@@ -193,17 +169,38 @@ struct PausedRequestRow: View {
         }
     }
 
-    private func formatDuration(_ duration: TimeInterval) -> String {
-        if duration < 1 {
-            return String(format: "%.0f ms", duration * 1000)
+}
+
+// MARK: - Paused Action Button
+
+private struct PausedActionButton: View {
+    let title: String
+    let icon: String
+    let color: Color
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 3) {
+                Image(systemName: icon)
+                    .font(.system(size: 9, weight: .semibold))
+                Text(title)
+                    .font(.system(size: 11, weight: .medium))
+            }
+            .foregroundColor(color)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 5)
+            .frame(maxWidth: .infinity)
+            .background(color.opacity(0.12))
+            .cornerRadius(6)
         }
-        return String(format: "%.1f s", duration)
+        .buttonStyle(.plain)
     }
 }
 
 // MARK: - Paused Request Editor View
 
-struct PausedRequestEditorView: View {
+public struct PausedRequestEditorView: View {
     let paused: PausedRequest
 
     @SwiftUI.Environment(\.dismiss) private var dismiss
@@ -211,18 +208,22 @@ struct PausedRequestEditorView: View {
 
     @State private var url: String
     @State private var method: String
-    @State private var headers: [String: String]
+    @State private var headerItems: [EditableHeaderItem]
     @State private var requestBody: String
+    @State private var showingAddHeader = false
+    @State private var newHeaderKey = ""
+    @State private var newHeaderValue = ""
 
-    init(paused: PausedRequest) {
+    public init(paused: PausedRequest) {
         self.paused = paused
         _url = State(initialValue: paused.originalRequest.url?.absoluteString ?? "")
         _method = State(initialValue: paused.originalRequest.httpMethod ?? "GET")
-        _headers = State(initialValue: paused.originalRequest.allHTTPHeaderFields ?? [:])
+        let headersDict = paused.originalRequest.allHTTPHeaderFields ?? [:]
+        _headerItems = State(initialValue: headersDict.map { EditableHeaderItem(key: $0.key, value: $0.value) })
         _requestBody = State(initialValue: String(data: paused.originalRequest.httpBody ?? Data(), encoding: .utf8) ?? "")
     }
 
-    var body: some View {
+    public var body: some View {
         Form {
             Section("URL") {
                 TextField("URL", text: $url)
@@ -242,23 +243,54 @@ struct PausedRequestEditorView: View {
                 .pickerStyle(.segmented)
             }
 
-            Section("Headers") {
-                ForEach(Array(headers.keys.sorted()), id: \.self) { key in
-                    VStack(alignment: .leading) {
-                        Text(key)
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                        Text(headers[key] ?? "")
+            Section {
+                ForEach($headerItems) { $item in
+                    VStack(alignment: .leading, spacing: 4) {
+                        TextField("Header Name", text: $item.key)
+                            .font(.system(.body, design: .monospaced))
+                            #if os(iOS)
+                            .textInputAutocapitalization(.never)
+                            #endif
+                            .autocorrectionDisabled()
+
+                        TextField("Header Value", text: $item.value)
                             .font(.system(.caption, design: .monospaced))
+                            .foregroundColor(.secondary)
+                            #if os(iOS)
+                            .textInputAutocapitalization(.never)
+                            #endif
+                            .autocorrectionDisabled()
                     }
+                    .padding(.vertical, 2)
+                }
+                .onDelete { indexSet in
+                    headerItems.remove(atOffsets: indexSet)
+                }
+
+                Button {
+                    showingAddHeader = true
+                } label: {
+                    Label("Add Header", systemImage: "plus.circle")
+                }
+            } header: {
+                HStack {
+                    Text("Headers")
+                    Spacer()
+                    Text("\(headerItems.count)")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
                 }
             }
 
-            if !requestBody.isEmpty {
-                Section("Body") {
-                    TextEditor(text: $requestBody)
-                        .font(.system(.caption, design: .monospaced))
-                        .frame(minHeight: 100)
+            Section("Body") {
+                TextEditor(text: $requestBody)
+                    .font(.system(.caption, design: .monospaced))
+                    .frame(minHeight: 100)
+
+                if !requestBody.isEmpty {
+                    Button("Format JSON") {
+                        formatJSON()
+                    }
                 }
             }
         }
@@ -268,16 +300,42 @@ struct PausedRequestEditorView: View {
         #endif
         .toolbar {
             ToolbarItem(placement: .cancellationAction) {
-                Button("Cancel") {
+                Button("Discard") {
+                    // Just cancel the breakpoint without resuming
+                    engine.cancel(id: paused.id)
                     dismiss()
                 }
             }
 
             ToolbarItem(placement: .confirmationAction) {
-                Button("Resume") {
+                Button("Resume with Changes") {
                     resumeWithModifiedRequest()
                 }
             }
+        }
+        .alert("Add Header", isPresented: $showingAddHeader) {
+            TextField("Header Name", text: $newHeaderKey)
+            TextField("Header Value", text: $newHeaderValue)
+            Button("Cancel", role: .cancel) {
+                newHeaderKey = ""
+                newHeaderValue = ""
+            }
+            Button("Add") {
+                if !newHeaderKey.isEmpty {
+                    headerItems.append(EditableHeaderItem(key: newHeaderKey, value: newHeaderValue))
+                    newHeaderKey = ""
+                    newHeaderValue = ""
+                }
+            }
+        }
+    }
+
+    private func formatJSON() {
+        if let data = requestBody.data(using: .utf8),
+           let json = try? JSONSerialization.jsonObject(with: data),
+           let prettyData = try? JSONSerialization.data(withJSONObject: json, options: [.prettyPrinted, .sortedKeys]),
+           let prettyString = String(data: prettyData, encoding: .utf8) {
+            requestBody = prettyString
         }
     }
 
@@ -290,7 +348,14 @@ struct PausedRequestEditorView: View {
 
         var request = URLRequest(url: requestURL)
         request.httpMethod = method
-        request.allHTTPHeaderFields = headers
+
+        // Convert header items back to dictionary
+        var headersDict: [String: String] = [:]
+        for item in headerItems where !item.key.isEmpty {
+            headersDict[item.key] = item.value
+        }
+        request.allHTTPHeaderFields = headersDict
+
         if !requestBody.isEmpty {
             request.httpBody = requestBody.data(using: .utf8)
         }
@@ -298,6 +363,13 @@ struct PausedRequestEditorView: View {
         engine.resume(id: paused.id, with: request)
         dismiss()
     }
+}
+
+// Helper struct for editable headers
+struct EditableHeaderItem: Identifiable {
+    let id = UUID()
+    var key: String
+    var value: String
 }
 
 // MARK: - Quick Mock Creator View

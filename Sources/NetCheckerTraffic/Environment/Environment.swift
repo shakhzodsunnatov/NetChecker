@@ -1,33 +1,79 @@
 import Foundation
 
-/// Модель окружения (Production, Staging, Development, etc.)
+/// SSL Trust Mode for environment configuration (simplified version)
+public enum EnvironmentSSLMode: String, Codable, Sendable, CaseIterable, Hashable {
+    case strict = "strict"
+    case allowSelfSigned = "allowSelfSigned"
+    case allowExpired = "allowExpired"
+    case allowAll = "allowAll"
+
+    public var displayName: String {
+        switch self {
+        case .strict: return "Strict (Production)"
+        case .allowSelfSigned: return "Allow Self-Signed"
+        case .allowExpired: return "Allow Expired"
+        case .allowAll: return "Allow All (Insecure)"
+        }
+    }
+
+    public var description: String {
+        switch self {
+        case .strict: return "Only trust valid certificates"
+        case .allowSelfSigned: return "Trust self-signed certificates"
+        case .allowExpired: return "Trust expired certificates"
+        case .allowAll: return "Trust all certificates (development only)"
+        }
+    }
+
+    /// Convert to full SSLTrustMode with host
+    public func toSSLTrustMode(for host: String) -> SSLTrustMode {
+        switch self {
+        case .strict:
+            return .strict
+        case .allowSelfSigned:
+            return .allowSelfSigned(hosts: [host])
+        case .allowExpired:
+            return .allowExpired(hosts: [host])
+        case .allowAll:
+            return .allowAll(iUnderstandTheRisk: true)
+        }
+    }
+}
+
+/// Model for environment (Production, Staging, Development, etc.)
 public struct Environment: Codable, Sendable, Identifiable, Hashable {
-    /// Уникальный идентификатор
+    /// Unique identifier
     public var id: UUID
 
-    /// Название окружения
+    /// Environment name
     public var name: String
 
-    /// Emoji для отображения
+    /// Emoji for display
     public var emoji: String
 
-    /// Базовый URL
+    /// Base URL
     public var baseURL: URL
 
-    /// Дополнительные заголовки для этого окружения
+    /// Additional headers for this environment
     public var headers: [String: String]
 
-    /// Режим SSL
-    public var sslTrustModeName: String
+    /// SSL trust mode
+    public var sslTrustMode: EnvironmentSSLMode
 
-    /// Является ли окружением по умолчанию
+    /// Is this the default environment
     public var isDefault: Bool
 
-    /// Переменные окружения
+    /// Environment variables
     public var variables: [String: String]
 
-    /// Заметки
+    /// Notes
     public var notes: String?
+
+    /// Created date
+    public var createdAt: Date
+
+    /// Last modified date
+    public var modifiedAt: Date
 
     // MARK: - Initialization
 
@@ -37,64 +83,154 @@ public struct Environment: Codable, Sendable, Identifiable, Hashable {
         emoji: String = "🌐",
         baseURL: URL,
         headers: [String: String] = [:],
-        sslTrustModeName: String = "strict",
+        sslTrustMode: EnvironmentSSLMode = .strict,
         isDefault: Bool = false,
         variables: [String: String] = [:],
-        notes: String? = nil
+        notes: String? = nil,
+        createdAt: Date = Date(),
+        modifiedAt: Date = Date()
     ) {
         self.id = id
         self.name = name
         self.emoji = emoji
         self.baseURL = baseURL
         self.headers = headers
-        self.sslTrustModeName = sslTrustModeName
+        self.sslTrustMode = sslTrustMode
         self.isDefault = isDefault
         self.variables = variables
         self.notes = notes
+        self.createdAt = createdAt
+        self.modifiedAt = modifiedAt
     }
 
     // MARK: - Convenience Initializers
 
-    public init(name: String, url: String) {
-        self.init(
-            name: name,
-            baseURL: URL(string: url)!
-        )
+    /// Create environment from URL string (returns nil if URL is invalid)
+    public init?(name: String, urlString: String) {
+        guard let url = URL(string: urlString) else { return nil }
+        self.init(name: name, baseURL: url)
     }
 
-    public init(name: String, emoji: String, url: String) {
-        self.init(
-            name: name,
-            emoji: emoji,
-            baseURL: URL(string: url)!
-        )
+    /// Create environment with emoji from URL string (returns nil if URL is invalid)
+    public init?(name: String, emoji: String, urlString: String) {
+        guard let url = URL(string: urlString) else { return nil }
+        self.init(name: name, emoji: emoji, baseURL: url)
+    }
+
+    // MARK: - Codable (backward compatibility with sslTrustModeName)
+
+    private enum CodingKeys: String, CodingKey {
+        case id, name, emoji, baseURL, headers, sslTrustMode, sslTrustModeName
+        case isDefault, variables, notes, createdAt, modifiedAt
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+
+        id = try container.decode(UUID.self, forKey: .id)
+        name = try container.decode(String.self, forKey: .name)
+        emoji = try container.decodeIfPresent(String.self, forKey: .emoji) ?? "🌐"
+        baseURL = try container.decode(URL.self, forKey: .baseURL)
+        headers = try container.decodeIfPresent([String: String].self, forKey: .headers) ?? [:]
+
+        // Support both old sslTrustModeName (String) and new sslTrustMode (enum)
+        if let mode = try? container.decode(EnvironmentSSLMode.self, forKey: .sslTrustMode) {
+            sslTrustMode = mode
+        } else if let modeName = try? container.decode(String.self, forKey: .sslTrustModeName) {
+            sslTrustMode = EnvironmentSSLMode(rawValue: modeName) ?? .strict
+        } else {
+            sslTrustMode = .strict
+        }
+
+        isDefault = try container.decodeIfPresent(Bool.self, forKey: .isDefault) ?? false
+        variables = try container.decodeIfPresent([String: String].self, forKey: .variables) ?? [:]
+        notes = try container.decodeIfPresent(String.self, forKey: .notes)
+        createdAt = try container.decodeIfPresent(Date.self, forKey: .createdAt) ?? Date()
+        modifiedAt = try container.decodeIfPresent(Date.self, forKey: .modifiedAt) ?? Date()
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+
+        try container.encode(id, forKey: .id)
+        try container.encode(name, forKey: .name)
+        try container.encode(emoji, forKey: .emoji)
+        try container.encode(baseURL, forKey: .baseURL)
+        try container.encode(headers, forKey: .headers)
+        try container.encode(sslTrustMode, forKey: .sslTrustMode)
+        try container.encode(isDefault, forKey: .isDefault)
+        try container.encode(variables, forKey: .variables)
+        try container.encodeIfPresent(notes, forKey: .notes)
+        try container.encode(createdAt, forKey: .createdAt)
+        try container.encode(modifiedAt, forKey: .modifiedAt)
     }
 
     // MARK: - Computed Properties
 
-    /// Хост из базового URL
+    /// Host from base URL
     public var host: String {
         baseURL.host ?? ""
     }
 
-    /// Схема (http/https)
+    /// Scheme (http/https)
     public var scheme: String {
         baseURL.scheme ?? "https"
     }
 
-    /// Порт
+    /// Port
     public var port: Int? {
         baseURL.port
     }
 
-    /// Полный базовый URL как строка
+    /// Full base URL as string
     public var baseURLString: String {
         baseURL.absoluteString
     }
 
-    /// Краткое описание для списка
+    /// Short description for list
     public var displayText: String {
         "\(emoji) \(name)"
+    }
+
+    /// Has custom headers configured
+    public var hasHeaders: Bool {
+        !headers.isEmpty
+    }
+
+    /// Has variables configured
+    public var hasVariables: Bool {
+        !variables.isEmpty
+    }
+
+    // MARK: - Mutating Methods
+
+    /// Update modified date
+    public mutating func touch() {
+        modifiedAt = Date()
+    }
+
+    /// Add or update header
+    public mutating func setHeader(_ value: String, forKey key: String) {
+        headers[key] = value
+        touch()
+    }
+
+    /// Remove header
+    public mutating func removeHeader(forKey key: String) {
+        headers.removeValue(forKey: key)
+        touch()
+    }
+
+    /// Add or update variable
+    public mutating func setVariable(_ value: String, forKey key: String) {
+        variables[key] = value
+        touch()
+    }
+
+    /// Remove variable
+    public mutating func removeVariable(forKey key: String) {
+        variables.removeValue(forKey: key)
+        touch()
     }
 }
 
@@ -107,7 +243,7 @@ public extension Environment {
             name: "Production",
             emoji: "🟢",
             baseURL: baseURL,
-            sslTrustModeName: "strict",
+            sslTrustMode: .strict,
             isDefault: true
         )
     }
@@ -118,7 +254,7 @@ public extension Environment {
             name: "Staging",
             emoji: "🟡",
             baseURL: baseURL,
-            sslTrustModeName: "strict"
+            sslTrustMode: .strict
         )
     }
 
@@ -128,17 +264,76 @@ public extension Environment {
             name: "Development",
             emoji: "🔧",
             baseURL: baseURL,
-            sslTrustModeName: "allowSelfSigned"
+            sslTrustMode: .allowSelfSigned
         )
     }
 
     /// Local preset
-    static func local(baseURL: URL) -> Environment {
-        Environment(
+    static func local(port: Int = 8080) -> Environment? {
+        guard let url = URL(string: "http://localhost:\(port)") else { return nil }
+        return Environment(
             name: "Local",
             emoji: "💻",
-            baseURL: baseURL,
-            sslTrustModeName: "allowAll"
+            baseURL: url,
+            sslTrustMode: .allowAll
         )
+    }
+
+    /// Create from preset type
+    static func from(preset: EnvironmentPresetType, baseURL: URL) -> Environment {
+        switch preset {
+        case .production:
+            return production(baseURL: baseURL)
+        case .staging:
+            return staging(baseURL: baseURL)
+        case .development:
+            return development(baseURL: baseURL)
+        case .local:
+            return Environment(
+                name: "Local",
+                emoji: "💻",
+                baseURL: baseURL,
+                sslTrustMode: .allowAll
+            )
+        case .custom:
+            return Environment(
+                name: "Custom",
+                emoji: "⚙️",
+                baseURL: baseURL,
+                sslTrustMode: .strict
+            )
+        }
+    }
+}
+
+// MARK: - Preset Type
+
+public enum EnvironmentPresetType: String, CaseIterable, Sendable {
+    case production
+    case staging
+    case development
+    case local
+    case custom
+
+    public var displayName: String {
+        rawValue.capitalized
+    }
+
+    public var defaultEmoji: String {
+        switch self {
+        case .production: return "🟢"
+        case .staging: return "🟡"
+        case .development: return "🔧"
+        case .local: return "💻"
+        case .custom: return "⚙️"
+        }
+    }
+
+    public var defaultSSLMode: EnvironmentSSLMode {
+        switch self {
+        case .production, .staging: return .strict
+        case .development: return .allowSelfSigned
+        case .local, .custom: return .allowAll
+        }
     }
 }

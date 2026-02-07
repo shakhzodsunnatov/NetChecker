@@ -241,6 +241,8 @@ struct MockCreatorFromRecordView: View {
 
     @State private var statusCode: Int
     @State private var responseBody: String
+    @State private var requestBody: String
+    @State private var useCustomRequestBody = false
     @State private var contentType = "application/json"
     @State private var useExactURL = true
 
@@ -249,6 +251,8 @@ struct MockCreatorFromRecordView: View {
         // Pre-fill with existing response if available
         _statusCode = State(initialValue: record.response?.statusCode ?? 200)
         _responseBody = State(initialValue: record.response?.bodyString ?? "{\n  \"message\": \"Mocked response\"\n}")
+        // Pre-fill request body from original request
+        _requestBody = State(initialValue: record.request.bodyString ?? "")
     }
 
     var body: some View {
@@ -270,6 +274,38 @@ struct MockCreatorFromRecordView: View {
                 Text("URL to Mock")
             } footer: {
                 Text(useExactURL ? "Will only match this exact URL" : "Will match URL pattern with wildcards")
+            }
+
+            // Custom Request Body Section
+            if record.method != .get && record.method != .head {
+                Section {
+                    Toggle("Override Request Body", isOn: $useCustomRequestBody)
+
+                    if useCustomRequestBody {
+                        TextEditor(text: $requestBody)
+                            .font(.system(.caption, design: .monospaced))
+                            .frame(minHeight: 100)
+
+                        Button("Format JSON") {
+                            formatRequestJSON()
+                        }
+                        .disabled(requestBody.isEmpty)
+                    }
+                } header: {
+                    HStack {
+                        Text("Request Body")
+                        Spacer()
+                        if !requestBody.isEmpty {
+                            Text("\(requestBody.count) chars")
+                                .font(.caption2)
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                } footer: {
+                    Text(useCustomRequestBody
+                         ? "This body will be sent instead of the original request body"
+                         : "Original request body will be used")
+                }
             }
 
             Section("Response Status") {
@@ -312,7 +348,7 @@ struct MockCreatorFromRecordView: View {
 
                 if contentType == "application/json" {
                     Button("Format JSON") {
-                        formatJSON()
+                        formatResponseJSON()
                     }
                     .disabled(responseBody.isEmpty)
                 }
@@ -341,7 +377,16 @@ struct MockCreatorFromRecordView: View {
         }
     }
 
-    private func formatJSON() {
+    private func formatRequestJSON() {
+        if let data = requestBody.data(using: .utf8),
+           let json = try? JSONSerialization.jsonObject(with: data),
+           let prettyData = try? JSONSerialization.data(withJSONObject: json, options: [.prettyPrinted, .sortedKeys]),
+           let prettyString = String(data: prettyData, encoding: .utf8) {
+            requestBody = prettyString
+        }
+    }
+
+    private func formatResponseJSON() {
         if let data = responseBody.data(using: .utf8),
            let json = try? JSONSerialization.jsonObject(with: data),
            let prettyData = try? JSONSerialization.data(withJSONObject: json, options: [.prettyPrinted, .sortedKeys]),
@@ -364,7 +409,8 @@ struct MockCreatorFromRecordView: View {
         let response = MockResponse(
             statusCode: statusCode,
             headers: ["Content-Type": contentType],
-            body: responseBody.data(using: .utf8)
+            body: responseBody.data(using: .utf8),
+            requestBodyOverride: useCustomRequestBody ? requestBody.data(using: .utf8) : nil
         )
 
         let rule = MockRule(

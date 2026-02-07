@@ -5,12 +5,12 @@ import Combine
 /// Main list view for traffic records
 public struct NetCheckerTrafficUI_TrafficListView: View {
     @ObservedObject private var store = TrafficStore.shared
+    @ObservedObject private var interceptor = TrafficInterceptor.shared
     @State private var selectedRecord: TrafficRecord?
     @State private var filter = TrafficFilter()
     @State private var searchText = ""
     @State private var showingFilters = false
     @State private var showingStatistics = false
-    @State private var isRecording = true
 
     public init() {}
 
@@ -44,16 +44,15 @@ public struct NetCheckerTrafficUI_TrafficListView: View {
                 ToolbarItem(placement: .primaryAction) {
                     Menu {
                         Button {
-                            isRecording.toggle()
-                            if isRecording {
-                                TrafficInterceptor.shared.start()
+                            if interceptor.isRunning {
+                                interceptor.stop()
                             } else {
-                                TrafficInterceptor.shared.stop()
+                                interceptor.start()
                             }
                         } label: {
                             Label(
-                                isRecording ? "Pause Recording" : "Resume Recording",
-                                systemImage: isRecording ? "pause.fill" : "play.fill"
+                                interceptor.isRunning ? "Pause Recording" : "Resume Recording",
+                                systemImage: interceptor.isRunning ? "pause.fill" : "play.fill"
                             )
                         }
 
@@ -82,7 +81,7 @@ public struct NetCheckerTrafficUI_TrafficListView: View {
                 }
 
                 ToolbarItem(placement: .primaryAction) {
-                    RecordingIndicator(isRecording: isRecording)
+                    RecordingIndicator(isRecording: interceptor.isRunning)
                 }
             }
             .sheet(item: $selectedRecord) { record in
@@ -125,16 +124,15 @@ public struct NetCheckerTrafficUI_TrafficListView: View {
             Text("No Traffic Recorded")
                 .font(.headline)
 
-            Text(isRecording
+            Text(interceptor.isRunning
                  ? "Network requests will appear here"
                  : "Recording is paused")
                 .font(.subheadline)
                 .foregroundColor(.secondary)
 
-            if !isRecording {
+            if !interceptor.isRunning {
                 Button {
-                    isRecording = true
-                    TrafficInterceptor.shared.start()
+                    interceptor.start()
                 } label: {
                     Label("Start Recording", systemImage: "play.fill")
                 }
@@ -146,7 +144,7 @@ public struct NetCheckerTrafficUI_TrafficListView: View {
 
     private var recordsList: some View {
         List {
-            ForEach(filteredRecords) { record in
+            ForEach(filteredRecords, id: \.compositeId) { record in
                 TrafficRecordRow(record: record)
                     .onTapGesture {
                         selectedRecord = record
@@ -276,22 +274,11 @@ struct StateBadge: View {
 struct RecordingIndicator: View {
     let isRecording: Bool
 
-    @State private var isAnimating = false
-
     var body: some View {
-        HStack(spacing: 4) {
-            Circle()
-                .fill(isRecording ? Color.red : Color.gray)
-                .frame(width: 8, height: 8)
-                .scaleEffect(isAnimating && isRecording ? 1.2 : 1.0)
-                .animation(
-                    isRecording
-                        ? .easeInOut(duration: 0.8).repeatForever(autoreverses: true)
-                        : .default,
-                    value: isAnimating
-                )
-                .onAppear { isAnimating = true }
-        }
+        Circle()
+            .fill(isRecording ? Color.red : Color.gray)
+            .frame(width: 8, height: 8)
+            .opacity(isRecording ? 1.0 : 0.4)
     }
 }
 
@@ -299,6 +286,7 @@ struct RecordingIndicator: View {
 
 struct StatisticsBanner: View {
     let records: [TrafficRecord]
+    @ObservedObject private var store = TrafficStore.shared
 
     var body: some View {
         HStack(spacing: 16) {
@@ -311,47 +299,22 @@ struct StatisticsBanner: View {
                 .frame(height: 24)
 
             StatItem(
-                value: "\(successCount)",
+                value: "\(records.count - store.errorCount - store.pendingCount)",
                 label: "Success",
                 color: .green
             )
 
             StatItem(
-                value: "\(errorCount)",
+                value: "\(store.errorCount)",
                 label: "Errors",
                 color: .red
             )
 
             Spacer()
-
-            Text(averageDuration)
-                .font(.caption)
-                .foregroundColor(.secondary)
         }
         .padding(.horizontal)
         .padding(.vertical, 8)
         .background(Color.gray.opacity(0.15))
-    }
-
-    private var successCount: Int {
-        records.filter { $0.statusCode?.isSuccessStatusCode == true }.count
-    }
-
-    private var errorCount: Int {
-        records.filter { $0.isError || ($0.statusCode?.isErrorStatusCode == true) }.count
-    }
-
-    private var averageDuration: String {
-        let completedRecords = records.filter { if case .completed = $0.state { return true }; return false }
-        guard !completedRecords.isEmpty else { return "" }
-
-        let totalDuration = completedRecords.reduce(0.0) { $0 + $1.duration }
-        let average = totalDuration / Double(completedRecords.count)
-
-        if average < 1 {
-            return "Avg: \(String(format: "%.0f", average * 1000)) ms"
-        }
-        return "Avg: \(String(format: "%.2f", average)) s"
     }
 }
 

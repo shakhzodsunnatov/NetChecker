@@ -56,12 +56,51 @@ public struct RequestData: Codable, Sendable, Hashable {
         self.url = request.url ?? URL(string: "about:blank")!
         self.method = HTTPMethod(from: request)
         self.headers = request.allHTTPHeaderFields ?? [:]
-        self.body = request.httpBody
-        self.bodySize = Int64(request.httpBody?.count ?? 0)
+
+        // Try to get body from httpBody first, then from httpBodyStream
+        if let httpBody = request.httpBody {
+            self.body = httpBody
+            self.bodySize = Int64(httpBody.count)
+        } else if let bodyStream = request.httpBodyStream {
+            // Read from httpBodyStream (used by Alamofire and others)
+            let bodyData = Self.readBodyStream(bodyStream)
+            self.body = bodyData
+            self.bodySize = Int64(bodyData?.count ?? 0)
+        } else {
+            self.body = nil
+            self.bodySize = 0
+        }
+
         self.contentType = ContentType(headers: request.allHTTPHeaderFields)
         self.cachePolicy = Self.cachePolicyString(request.cachePolicy)
         self.timeoutInterval = request.timeoutInterval
         self.cookies = Self.extractCookies(from: request)
+    }
+
+    /// Read data from an InputStream
+    private static func readBodyStream(_ stream: InputStream) -> Data? {
+        stream.open()
+        defer { stream.close() }
+
+        var data = Data()
+        let bufferSize = 4096
+        let buffer = UnsafeMutablePointer<UInt8>.allocate(capacity: bufferSize)
+        defer { buffer.deallocate() }
+
+        while stream.hasBytesAvailable {
+            let bytesRead = stream.read(buffer, maxLength: bufferSize)
+            if bytesRead > 0 {
+                data.append(buffer, count: bytesRead)
+            } else if bytesRead < 0 {
+                // Error reading stream
+                return nil
+            } else {
+                // No more data
+                break
+            }
+        }
+
+        return data.isEmpty ? nil : data
     }
 
     // MARK: - Computed Properties

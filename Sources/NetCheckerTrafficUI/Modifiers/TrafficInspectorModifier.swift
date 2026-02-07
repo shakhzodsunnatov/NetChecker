@@ -2,6 +2,9 @@ import SwiftUI
 import NetCheckerTrafficCore
 import Combine
 
+/// NetChecker SDK Version
+public let NetCheckerVersion = "1.2.0"
+
 #if canImport(UIKit)
 import UIKit
 
@@ -237,20 +240,21 @@ struct TrafficInspectorSheet: View {
                 Label("Traffic", systemImage: "network")
             }
 
-            NavigationStack {
-                NetCheckerTrafficUI_EnvironmentSwitcherView()
-                    .toolbar {
-                        ToolbarItem(placement: .cancellationAction) {
-                            Button("Done") {
-                                dismiss()
-                            }
-                        }
-                    }
-            }
-            .tag(1)
-            .tabItem {
-                Label("Environments", systemImage: "server.rack")
-            }
+            // MARK: - Environment Tab (for future use)
+            // NavigationStack {
+            //     NetCheckerTrafficUI_EnvironmentSwitcherView()
+            //         .toolbar {
+            //             ToolbarItem(placement: .cancellationAction) {
+            //                 Button("Done") {
+            //                     dismiss()
+            //                 }
+            //             }
+            //         }
+            // }
+            // .tag(1)
+            // .tabItem {
+            //     Label("Environments", systemImage: "server.rack")
+            // }
 
             NavigationStack {
                 NetCheckerTrafficUI_MockRulesView()
@@ -262,7 +266,7 @@ struct TrafficInspectorSheet: View {
                         }
                     }
             }
-            .tag(2)
+            .tag(1)
             .tabItem {
                 Label("Mocks", systemImage: "theatermasks")
             }
@@ -277,7 +281,7 @@ struct TrafficInspectorSheet: View {
                         }
                     }
             }
-            .tag(3)
+            .tag(2)
             .tabItem {
                 Label("Breakpoints", systemImage: "hand.raised")
             }
@@ -292,7 +296,7 @@ struct TrafficInspectorSheet: View {
                         }
                     }
             }
-            .tag(4)
+            .tag(3)
             .tabItem {
                 Label("Settings", systemImage: "gear")
             }
@@ -406,7 +410,7 @@ struct SettingsView: View {
                 HStack {
                     Text("SDK Version")
                     Spacer()
-                    Text("1.0.0")
+                    Text(NetCheckerVersion)
                         .foregroundColor(.secondary)
                 }
 

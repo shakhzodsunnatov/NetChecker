@@ -157,6 +157,7 @@ struct HeaderRow: View {
 public struct EditableHeadersView: View {
     @Binding var headers: [String: String]
 
+    @State private var showingAddHeader = false
     @State private var newKey = ""
     @State private var newValue = ""
 
@@ -165,48 +166,152 @@ public struct EditableHeadersView: View {
     }
 
     public var body: some View {
-        VStack(spacing: 12) {
-            ForEach(Array(headers.keys.sorted()), id: \.self) { key in
-                HStack {
-                    TextField("Key", text: .constant(key))
-                        .textFieldStyle(.roundedBorder)
-                        .disabled(true)
+        ForEach(Array(headers.keys.sorted()), id: \.self) { key in
+            HStack {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(key)
+                        .font(.system(.body, design: .monospaced))
+                        .fontWeight(.medium)
+                    Text(headers[key] ?? "")
+                        .font(.system(.caption, design: .monospaced))
+                        .foregroundColor(.secondary)
+                        .lineLimit(1)
+                }
 
-                    TextField("Value", text: Binding(
-                        get: { headers[key] ?? "" },
-                        set: { headers[key] = $0 }
-                    ))
-                    .textFieldStyle(.roundedBorder)
+                Spacer()
 
-                    Button {
-                        headers.removeValue(forKey: key)
-                    } label: {
-                        Image(systemName: "trash")
+                Button {
+                    headers.removeValue(forKey: key)
+                } label: {
+                    Image(systemName: "trash")
+                        .font(.caption)
+                        .foregroundColor(.red)
+                }
+                .buttonStyle(.borderless)
+            }
+        }
+
+        Button {
+            showingAddHeader = true
+        } label: {
+            Label("Add Header", systemImage: "plus.circle")
+        }
+        .alert("Add Header", isPresented: $showingAddHeader) {
+            TextField("Header Name", text: $newKey)
+            TextField("Header Value", text: $newValue)
+            Button("Cancel", role: .cancel) {
+                newKey = ""
+                newValue = ""
+            }
+            Button("Add") {
+                if !newKey.isEmpty {
+                    headers[newKey] = newValue
+                    newKey = ""
+                    newValue = ""
+                }
+            }
+        }
+    }
+}
+
+// MARK: - Header Presets
+
+/// Common header presets for easy configuration
+public struct HeaderPresets {
+    public static let commonHeaders: [(name: String, key: String, placeholder: String)] = [
+        ("Authorization", "Authorization", "Bearer <token>"),
+        ("Content-Type", "Content-Type", "application/json"),
+        ("Accept", "Accept", "application/json"),
+        ("API Key", "X-API-Key", "<api-key>"),
+        ("User Agent", "User-Agent", "MyApp/1.0"),
+        ("Accept-Language", "Accept-Language", "en-US"),
+    ]
+}
+
+/// View for adding headers from presets
+public struct HeaderPresetsView: View {
+    @Binding var headers: [String: String]
+    @SwiftUI.Environment(\.dismiss) private var dismiss
+
+    @State private var selectedPreset: (name: String, key: String, placeholder: String)?
+    @State private var customValue = ""
+
+    public init(headers: Binding<[String: String]>) {
+        self._headers = headers
+    }
+
+    public var body: some View {
+        NavigationStack {
+            List {
+                Section("Common Headers") {
+                    ForEach(HeaderPresets.commonHeaders, id: \.key) { preset in
+                        Button {
+                            selectedPreset = preset
+                            customValue = headers[preset.key] ?? ""
+                        } label: {
+                            HStack {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(preset.name)
+                                        .font(.subheadline)
+                                        .foregroundColor(.primary)
+                                    Text(preset.key)
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                }
+
+                                Spacer()
+
+                                if headers[preset.key] != nil {
+                                    Image(systemName: "checkmark.circle.fill")
+                                        .foregroundColor(.green)
+                                }
+                            }
+                        }
+                    }
+                }
+
+                if let preset = selectedPreset {
+                    Section("Set Value for \(preset.name)") {
+                        TextField(preset.placeholder, text: $customValue)
+                            .font(.system(.body, design: .monospaced))
+                            #if os(iOS)
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
+                            #endif
+
+                        HStack {
+                            Button("Remove") {
+                                headers.removeValue(forKey: preset.key)
+                                selectedPreset = nil
+                                customValue = ""
+                            }
                             .foregroundColor(.red)
+                            .disabled(headers[preset.key] == nil)
+
+                            Spacer()
+
+                            Button("Apply") {
+                                if !customValue.isEmpty {
+                                    headers[preset.key] = customValue
+                                }
+                                selectedPreset = nil
+                                customValue = ""
+                            }
+                            .disabled(customValue.isEmpty)
+                        }
                     }
                 }
             }
-
-            Divider()
-
-            HStack {
-                TextField("New key", text: $newKey)
-                    .textFieldStyle(.roundedBorder)
-
-                TextField("New value", text: $newValue)
-                    .textFieldStyle(.roundedBorder)
-
-                Button {
-                    if !newKey.isEmpty {
-                        headers[newKey] = newValue
-                        newKey = ""
-                        newValue = ""
+            .navigationTitle("Header Presets")
+            #if os(iOS)
+            .navigationBarTitleDisplayMode(.inline)
+            #endif
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") {
+                        dismiss()
                     }
-                } label: {
-                    Image(systemName: "plus.circle.fill")
-                        .foregroundColor(.green)
                 }
-                .disabled(newKey.isEmpty)
             }
         }
     }

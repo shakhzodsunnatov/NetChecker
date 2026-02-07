@@ -14,14 +14,16 @@ public final class TrafficStore: ObservableObject {
     /// Все записи
     @Published public private(set) var records: [TrafficRecord] = []
 
-    /// Количество записей
-    @Published public private(set) var count: Int = 0
+    /// Количество записей (derived, no extra notification)
+    public var count: Int { records.count }
 
-    /// Количество ошибок
-    @Published public private(set) var errorCount: Int = 0
+    /// Количество ошибок (derived, no extra notification)
+    public var errorCount: Int { _errorCount }
+    private var _errorCount: Int = 0
 
-    /// Количество pending запросов
-    @Published public private(set) var pendingCount: Int = 0
+    /// Количество pending запросов (derived, no extra notification)
+    public var pendingCount: Int { _pendingCount }
+    private var _pendingCount: Int = 0
 
     // MARK: - Configuration
 
@@ -87,11 +89,12 @@ public final class TrafficStore: ObservableObject {
             return
         }
 
+        // Must explicitly notify - in-place array mutation may not trigger @Published
+        objectWillChange.send()
         records[index] = record
         updateCounts()
         onRecordUpdated?(record)
 
-        // Notify if error
         if case .failed = record.state {
             onError?(record)
         }
@@ -103,6 +106,9 @@ public final class TrafficStore: ObservableObject {
 
         var record = records[index]
         modifier(&record)
+
+        // Must explicitly notify - in-place array mutation may not trigger @Published
+        objectWillChange.send()
         records[index] = record
 
         updateCounts()
@@ -200,9 +206,8 @@ public final class TrafficStore: ObservableObject {
     // MARK: - Private Methods
 
     private func updateCounts() {
-        count = records.count
-        errorCount = records.filter { $0.isError }.count
-        pendingCount = records.filter {
+        _errorCount = records.filter { $0.isError }.count
+        _pendingCount = records.filter {
             if case .pending = $0.state { return true }
             return false
         }.count
