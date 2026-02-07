@@ -123,7 +123,7 @@ Pause, inspect, and modify requests in real-time:
 - Change URL endpoints
 - Auto-resume with timeout
 
-### 🌍 Environment Switching
+### 🌍 Environment Switching <sup><kbd>Coming Soon</kbd></sup>
 Switch between environments instantly:
 - Dev / Staging / Production
 - Quick URL overrides
@@ -411,7 +411,9 @@ ForEach(breakpointEngine.pausedRequests) { paused in
 
 ---
 
-### 🌍 Environment Management
+### 🌍 Environment Management <sup><kbd>Coming Soon</kbd></sup>
+
+> **Note:** Environment switching UI is under development. The API is ready and functional, but the UI tab is temporarily disabled.
 
 Switch between environments without rebuilding:
 
@@ -534,7 +536,7 @@ if let harData = HARFormatter.format(records: records) {
 | `TrafficStatisticsView` | Visual statistics dashboard |
 | `WaterfallChartView` | Performance timing visualization |
 | `SSLDashboardView` | SSL/TLS security overview |
-| `EnvironmentSwitcherView` | Environment management UI |
+| `EnvironmentSwitcherView` | Environment management UI *(Coming Soon)* |
 | `MockRulesView` | Manage mock rules |
 | `BreakpointRulesView` | Manage breakpoints |
 
