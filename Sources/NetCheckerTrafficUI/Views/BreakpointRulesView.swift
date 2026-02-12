@@ -123,13 +123,13 @@ struct PausedRequestRow: View {
 
                 Spacer()
 
-                Text("Paused")
+                Text(paused.phase == .response ? "Response Paused" : "Request Paused")
                     .font(.caption2)
                     .fontWeight(.medium)
-                    .foregroundColor(.orange)
+                    .foregroundColor(paused.phase == .response ? .blue : .orange)
                     .padding(.horizontal, 6)
                     .padding(.vertical, 2)
-                    .background(Color.orange.opacity(0.12))
+                    .background((paused.phase == .response ? Color.blue : Color.orange).opacity(0.12))
                     .cornerRadius(4)
             }
 

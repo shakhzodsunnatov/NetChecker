@@ -103,9 +103,9 @@ public final class BreakpointEngine: ObservableObject {
     }
 
     /// Приостановить запрос и ждать
-    public func pause(request: URLRequest) async -> URLRequest? {
+    public func pause(request: URLRequest, phase: BreakpointPhase = .request) async -> URLRequest? {
         let id = UUID()
-        let pausedRequest = PausedRequest(id: id, originalRequest: request)
+        let pausedRequest = PausedRequest(id: id, originalRequest: request, phase: phase)
 
         pausedRequests.append(pausedRequest)
 
@@ -193,15 +193,25 @@ public final class BreakpointEngine: ObservableObject {
 
 // MARK: - Paused Request
 
+/// Phase at which a breakpoint paused the request
+public enum BreakpointPhase: String, Sendable, Codable {
+    /// Paused before sending the request to the server
+    case request
+    /// Paused after receiving the response, before delivering to the app
+    case response
+}
+
 public struct PausedRequest: Identifiable, Sendable {
     public let id: UUID
     public let originalRequest: URLRequest
     public let pausedAt: Date
+    public let phase: BreakpointPhase
 
-    init(id: UUID, originalRequest: URLRequest) {
+    init(id: UUID, originalRequest: URLRequest, phase: BreakpointPhase = .request) {
         self.id = id
         self.originalRequest = originalRequest
         self.pausedAt = Date()
+        self.phase = phase
     }
 
     public var url: URL? {
@@ -222,6 +232,13 @@ public struct PausedRequest: Identifiable, Sendable {
 
     public var pausedDuration: TimeInterval {
         Date().timeIntervalSince(pausedAt)
+    }
+
+    public var phaseLabel: String {
+        switch phase {
+        case .request: return "Request"
+        case .response: return "Response"
+        }
     }
 }
 
