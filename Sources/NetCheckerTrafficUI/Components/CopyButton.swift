@@ -59,6 +59,7 @@ public struct NetCheckerTrafficUI_CopyButton: View {
 /// Copy button with menu for multiple formats
 public struct CopyMenuButton: View {
     let items: [(label: String, value: String)]
+    @State private var copiedIndex: Int?
 
     public init(items: [(label: String, value: String)]) {
         self.items = items
@@ -69,13 +70,19 @@ public struct CopyMenuButton: View {
             ForEach(items.indices, id: \.self) { index in
                 Button {
                     copyToClipboard(items[index].value)
+                    copiedIndex = index
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 2) { copiedIndex = nil }
                 } label: {
-                    Label(items[index].label, systemImage: "doc.on.doc")
+                    Label(
+                        copiedIndex == index ? "Copied!" : items[index].label,
+                        systemImage: copiedIndex == index ? "checkmark" : "doc.on.doc"
+                    )
                 }
             }
         } label: {
-            Image(systemName: "doc.on.doc")
+            Image(systemName: copiedIndex != nil ? "checkmark" : "doc.on.doc")
                 .font(.caption)
+                .foregroundColor(copiedIndex != nil ? .green : .accentColor)
         }
     }
 
