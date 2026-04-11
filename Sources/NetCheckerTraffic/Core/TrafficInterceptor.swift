@@ -93,6 +93,11 @@ public final class TrafficInterceptor: ObservableObject {
             break
         }
 
+        // Автостарт MCP-сервера если включён в конфигурации
+        if configuration.mcp.enabled {
+            mcpServer.start(port: configuration.mcp.port)
+        }
+
         isRunning = true
         print("[NetChecker] Traffic interception started (level: \(configuration.level.rawValue))")
     }
@@ -100,6 +105,11 @@ public final class TrafficInterceptor: ObservableObject {
     /// Остановить перехват
     public func stop() {
         guard isRunning else { return }
+
+        // Остановить MCP-сервер если он запущен
+        if mcpServer.isRunning {
+            mcpServer.stop()
+        }
 
         // Update thread-safe state
         NetCheckerURLProtocol.setIntercepting(false)

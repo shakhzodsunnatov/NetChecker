@@ -1,6 +1,10 @@
 import Foundation
 import Network
 
+#if canImport(UIKit)
+import UIKit
+#endif
+
 /// MCP-сервер для приёма структурированных логов от AI-инструментов
 @MainActor
 public final class MCPServer: ObservableObject {
@@ -26,6 +30,9 @@ public final class MCPServer: ObservableObject {
     /// Активные подключения
     @Published public private(set) var activeConnections: Int = 0
 
+    /// IP-адрес устройства в локальной сети
+    @Published public private(set) var localIPAddress: String = "localhost"
+
     // MARK: - Private Properties
 
     private var listener: NWListener?
@@ -41,6 +48,11 @@ public final class MCPServer: ObservableObject {
 
     // MARK: - Public Methods
 
+    /// Полный URL для подключения к серверу
+    public var connectionURL: String {
+        "http://\(localIPAddress):\(port)"
+    }
+
     /// Запустить MCP-сервер на указанном порту
     public func start(port: UInt16 = 9876) {
         guard !isRunning else {
@@ -49,6 +61,7 @@ public final class MCPServer: ObservableObject {
         }
 
         self.port = port
+        self.localIPAddress = Self.detectLocalIPAddress()
 
         do {
             let params = NWParameters.tcp
@@ -100,7 +113,7 @@ public final class MCPServer: ObservableObject {
         case .ready:
             isRunning = true
             lastError = nil
-            print("[NetChecker MCP] Сервер запущен на порту \(port)")
+            printConnectionInfo()
 
         case .failed(let error):
             isRunning = false
@@ -197,5 +210,74 @@ public final class MCPServer: ObservableObject {
                 connection.cancel()
             }
         )
+    }
+
+    // MARK: - IP Detection
+
+    /// Вывести информацию о подключении в консоль Xcode
+    private func printConnectionInfo() {
+        let url = connectionURL
+        print("")
+        print("┌──────────────────────────────────────────────────")
+        print("│ [NetChecker MCP] Сервер запущен!")
+        print("│")
+        print("│ URL:    \(url)")
+        print("│ Status: \(url)/status")
+        print("│")
+        print("│ Тест:")
+        print("│ curl -X POST \(url)/log \\")
+        print("│   -H \"Content-Type: application/json\" \\")
+        print("│   -d '{\"operationType\":\"apiCall\",\"source\":{\"toolName\":\"test\",\"sessionId\":\"s1\"},\"payload\":{\"type\":\"networkCall\",\"url\":\"https://api.example.com\",\"method\":\"GET\",\"statusCode\":200},\"severity\":\"info\"}'")
+        print("└──────────────────────────────────────────────────")
+        print("")
+    }
+
+    /// Определить IP-адрес устройства в локальной сети
+    static func detectLocalIPAddress() -> String {
+        var address = "localhost"
+        var ifaddr: UnsafeMutablePointer<ifaddrs>?
+
+        guard getifaddrs(&ifaddr) == 0, let firstAddr = ifaddr else {
+            return address
+        }
+
+        defer { freeifaddrs(ifaddr) }
+
+        var current: UnsafeMutablePointer<ifaddrs>? = firstAddr
+        while let addr = current {
+            let flags = Int32(addr.pointee.ifa_flags)
+            let isUp = (flags & IFF_UP) != 0
+            let isLoopback = (flags & IFF_LOOPBACK) != 0
+
+            if isUp && !isLoopback {
+                let family = addr.pointee.ifa_addr.pointee.sa_family
+                if family == UInt8(AF_INET) { // IPv4
+                    var hostname = [CChar](repeating: 0, count: Int(NI_MAXHOST))
+                    let result = getnameinfo(
+                        addr.pointee.ifa_addr,
+                        socklen_t(addr.pointee.ifa_addr.pointee.sa_len),
+                        &hostname,
+                        socklen_t(hostname.count),
+                        nil, 0,
+                        NI_NUMERICHOST
+                    )
+                    if result == 0 {
+                        let ip = String(cString: hostname)
+                        // Предпочитаем en0 (WiFi на iOS, основной на Mac)
+                        let ifName = String(cString: addr.pointee.ifa_name)
+                        if ifName == "en0" {
+                            return ip
+                        }
+                        // Запомнить первый найденный, если en0 не найдётся
+                        if address == "localhost" {
+                            address = ip
+                        }
+                    }
+                }
+            }
+            current = addr.pointee.ifa_next
+        }
+
+        return address
     }
 }

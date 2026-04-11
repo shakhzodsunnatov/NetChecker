@@ -56,14 +56,14 @@ public struct MCPDashboardView: View {
 
             if server.isRunning {
                 HStack {
-                    Label("Порт", systemImage: "number")
+                    Label("URL", systemImage: "link")
                     Spacer()
                     HStack(spacing: 4) {
-                        Text("localhost:\(server.port)")
-                            .font(.system(.body, design: .monospaced))
+                        Text(server.connectionURL)
+                            .font(.system(.caption, design: .monospaced))
                             .foregroundColor(.secondary)
                         Button {
-                            copyToClipboard("localhost:\(server.port)")
+                            copyToClipboard(server.connectionURL)
                         } label: {
                             Image(systemName: "doc.on.doc")
                                 .font(.caption)
@@ -183,7 +183,7 @@ public struct MCPDashboardView: View {
                     .font(.caption)
                     .foregroundColor(.secondary)
 
-                Text("http://localhost:\(server.port)/log")
+                Text("\(server.connectionURL)/log")
                     .font(.system(.caption, design: .monospaced))
                     .padding(8)
                     .background(Color.secondary.opacity(0.1))
@@ -303,7 +303,7 @@ public struct MCPDashboardView: View {
 
     private var exampleCURL: String {
         """
-        curl -X POST http://localhost:\(server.port)/log \\
+        curl -X POST \(server.connectionURL)/log \\
           -H "Content-Type: application/json" \\
           -d '{"operationType":"apiCall","source":{"toolName":"my-tool","sessionId":"s1"},"payload":{"type":"networkCall","url":"https://api.example.com","method":"GET","statusCode":200},"severity":"info"}'
         """
