@@ -333,7 +333,7 @@ struct TrafficInspectorSheet: View {
                         }
                     }
             }
-            .tag(4)
+            .tag(3)
             .tabItem {
                 Label("Settings", systemImage: "gear")
             }
