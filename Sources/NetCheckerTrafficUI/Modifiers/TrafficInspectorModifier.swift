@@ -73,7 +73,7 @@ public struct NetCheckerConfiguration {
     /// Whether breakpoints are enabled by default. Default is `false`.
     public var enableBreakpoints: Bool
 
-    /// Автоматически запустить MCP-сервер для приёма логов от AI-инструментов. Default is `true`.
+    /// Автоматически запустить MCP-сервер для приёма логов от AI-инструментов. Default is `false`.
     public var enableMCP: Bool
 
     /// Порт MCP-сервера. Default is `9876`.
@@ -95,7 +95,7 @@ public struct NetCheckerConfiguration {
         startInterceptor: Bool = true,
         enableMocking: Bool = false,
         enableBreakpoints: Bool = false,
-        enableMCP: Bool = true,
+        enableMCP: Bool = false,
         mcpPort: UInt16 = 9876,
         environmentGroups: [EnvironmentGroup] = [],
         hapticFeedback: Bool = true,
