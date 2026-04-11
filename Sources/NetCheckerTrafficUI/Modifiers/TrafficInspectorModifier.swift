@@ -287,7 +287,7 @@ struct TrafficInspectorSheet: View {
             }
 
             NavigationStack {
-                SettingsView()
+                MCPDashboardView()
                     .toolbar {
                         ToolbarItem(placement: .cancellationAction) {
                             Button("Done") {
@@ -297,6 +297,21 @@ struct TrafficInspectorSheet: View {
                     }
             }
             .tag(3)
+            .tabItem {
+                Label("MCP", systemImage: "antenna.radiowaves.left.and.right")
+            }
+
+            NavigationStack {
+                SettingsView()
+                    .toolbar {
+                        ToolbarItem(placement: .cancellationAction) {
+                            Button("Done") {
+                                dismiss()
+                            }
+                        }
+                    }
+            }
+            .tag(4)
             .tabItem {
                 Label("Settings", systemImage: "gear")
             }

@@ -1,6 +1,7 @@
 import XCTest
 @testable import NetCheckerTrafficCore
 
+@MainActor
 final class TrafficTests: XCTestCase {
 
     func testTrafficStoreInitialization() {
@@ -16,16 +17,16 @@ final class TrafficTests: XCTestCase {
     }
 
     func testStatusCategoryClassification() {
-        XCTAssertEqual(StatusCategory.from(statusCode: 200), .success)
-        XCTAssertEqual(StatusCategory.from(statusCode: 301), .redirect)
-        XCTAssertEqual(StatusCategory.from(statusCode: 404), .clientError)
-        XCTAssertEqual(StatusCategory.from(statusCode: 500), .serverError)
+        XCTAssertEqual(StatusCategory(statusCode: 200), .success)
+        XCTAssertEqual(StatusCategory(statusCode: 301), .redirect)
+        XCTAssertEqual(StatusCategory(statusCode: 404), .clientError)
+        XCTAssertEqual(StatusCategory(statusCode: 500), .serverError)
     }
 
     func testContentTypeDetection() {
-        XCTAssertEqual(ContentType.detect(from: "application/json"), .json)
-        XCTAssertEqual(ContentType.detect(from: "text/html"), .html)
-        XCTAssertEqual(ContentType.detect(from: "text/plain"), .plainText)
+        XCTAssertEqual(ContentType(mimeType: "application/json"), .json)
+        XCTAssertEqual(ContentType(mimeType: "text/html"), .html)
+        XCTAssertEqual(ContentType(mimeType: "text/plain"), .plainText)
     }
 
     func testCURLFormatting() {

@@ -100,6 +100,12 @@ public struct TrafficTheme {
     public static let developmentColor = Color.blue
     public static let localColor = Color.green
 
+    // MARK: - MCP Colors
+
+    public static let mcpPrimaryColor = Color.teal
+    public static let mcpViolationColor = Color.orange
+    public static let mcpSourceColor = Color.indigo
+
     // MARK: - Diff Colors
 
     public static let addedColor = Color.green
