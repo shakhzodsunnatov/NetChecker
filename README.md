@@ -31,6 +31,22 @@
 
 ---
 
+## 🆕 What's New in 1.3.0 — AI Remote Control
+
+NetChecker now has a built-in **MCP server** that lets AI coding tools (Claude Code, Cursor) control your app directly:
+
+- **Execute API calls through device** — AI sends requests using your app's real auth tokens, cookies, and certificates. No credential sharing needed.
+- **Custom triggers** — Register any app action (navigate screens, run tests, toggle mocks) and let AI invoke it remotely.
+- **Traffic inspection** — AI can list all HTTP requests, filter errors, and get full request/response details.
+- **Mock control** — AI can add/remove mock rules and test error handling flows automatically.
+- **Device overlay** — AI can show messages, alerts, and test results directly on the device screen.
+- **Flow tracking** — Group related operations, validate expectations, generate test code from recorded flows.
+- **Zero-dependency bridge** — Pure Node.js MCP bridge, auto-discovers device via Wi-Fi.
+
+> **[Full MCP documentation →](#-mcp-server--ai-remote-control)**
+
+---
+
 ## Why NetChecker?
 
 Stop switching between your app and external proxy tools. **NetChecker** brings professional-grade network debugging directly into your development workflow — with zero configuration and a beautiful native UI.
