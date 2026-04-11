@@ -174,35 +174,38 @@ public struct MCPDashboardView: View {
 
     private var quickStartSection: some View {
         Section {
-            VStack(alignment: .leading, spacing: 8) {
-                Text("Как подключить AI-инструмент")
+            VStack(alignment: .leading, spacing: 10) {
+                Text("Подключи AI-инструмент за 1 шаг")
                     .font(.subheadline)
                     .fontWeight(.semibold)
 
-                Text("Отправь POST-запрос на:")
+                Text("Добавь в .mcp.json проекта:")
                     .font(.caption)
                     .foregroundColor(.secondary)
 
-                Text("\(server.connectionURL)/log")
-                    .font(.system(.caption, design: .monospaced))
-                    .padding(8)
-                    .background(Color.secondary.opacity(0.1))
-                    .cornerRadius(6)
-
-                Text("Тело запроса:")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-
-                Text(exampleJSON)
+                Text(mcpConfigSnippet)
                     .font(.system(.caption2, design: .monospaced))
                     .padding(8)
                     .background(Color.secondary.opacity(0.1))
                     .cornerRadius(6)
 
                 Button {
+                    copyToClipboard(mcpConfigSnippet)
+                } label: {
+                    Label("Скопировать MCP конфиг", systemImage: "doc.on.doc")
+                        .font(.caption)
+                }
+
+                Divider()
+
+                Text("Или cURL:")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+
+                Button {
                     copyToClipboard(exampleCURL)
                 } label: {
-                    Label("Скопировать пример cURL", systemImage: "doc.on.doc")
+                    Label("Скопировать cURL пример", systemImage: "terminal")
                         .font(.caption)
                 }
             }
@@ -280,6 +283,12 @@ public struct MCPDashboardView: View {
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(text, forType: .string)
         #endif
+    }
+
+    private var mcpConfigSnippet: String {
+        """
+        "NETCHECKER_URL": "\(server.connectionURL)"
+        """
     }
 
     private var exampleJSON: String {

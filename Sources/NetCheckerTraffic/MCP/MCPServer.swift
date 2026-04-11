@@ -26,6 +26,9 @@ public final class MCPServer: ObservableObject {
     /// Активные подключения
     @Published public private(set) var activeConnections: Int = 0
 
+    /// IP-адрес устройства в Wi-Fi сети
+    @Published public private(set) var deviceIP: String = "localhost"
+
     // MARK: - Private Properties
 
     private var listener: NWListener?
@@ -41,9 +44,9 @@ public final class MCPServer: ObservableObject {
 
     // MARK: - Public Methods
 
-    /// Полный URL для подключения (localhost + USB tunnel)
+    /// URL для подключения с Mac (Wi-Fi IP устройства)
     public var connectionURL: String {
-        "http://localhost:\(port)"
+        "http://\(deviceIP):\(port)"
     }
 
     /// Запустить MCP-сервер на указанном порту
@@ -54,6 +57,7 @@ public final class MCPServer: ObservableObject {
         }
 
         self.port = port
+        self.deviceIP = Self.detectWiFiIP()
 
         do {
             let params = NWParameters.tcp
@@ -210,11 +214,44 @@ public final class MCPServer: ObservableObject {
     private func printConnectionInfo() {
         print("")
         print("┌──────────────────────────────────────────────────")
-        print("│ [NetChecker MCP] Сервер запущен на порту \(port)")
+        print("│ [NetChecker MCP] Сервер запущен!")
         print("│")
-        print("│ Подключение: localhost:\(port)")
-        print("│ Для реального устройства: iproxy \(port) \(port)")
+        print("│ \(connectionURL)")
+        print("│")
+        print("│ Claude Code / Cursor .mcp.json:")
+        print("│ \"NETCHECKER_URL\": \"\(connectionURL)\"")
         print("└──────────────────────────────────────────────────")
         print("")
+    }
+
+    // MARK: - Wi-Fi IP
+
+    /// Определить IP устройства в Wi-Fi сети (en0)
+    static func detectWiFiIP() -> String {
+        var ifaddr: UnsafeMutablePointer<ifaddrs>?
+        guard getifaddrs(&ifaddr) == 0, let first = ifaddr else { return "localhost" }
+        defer { freeifaddrs(ifaddr) }
+
+        var fallback = "localhost"
+        var current: UnsafeMutablePointer<ifaddrs>? = first
+
+        while let addr = current {
+            let flags = Int32(addr.pointee.ifa_flags)
+            if (flags & IFF_UP) != 0, (flags & IFF_LOOPBACK) == 0,
+               addr.pointee.ifa_addr.pointee.sa_family == UInt8(AF_INET) {
+                var hostname = [CChar](repeating: 0, count: Int(NI_MAXHOST))
+                if getnameinfo(addr.pointee.ifa_addr,
+                               socklen_t(addr.pointee.ifa_addr.pointee.sa_len),
+                               &hostname, socklen_t(hostname.count),
+                               nil, 0, NI_NUMERICHOST) == 0 {
+                    let ip = String(cString: hostname)
+                    let name = String(cString: addr.pointee.ifa_name)
+                    if name == "en0" { return ip }
+                    if fallback == "localhost" { fallback = ip }
+                }
+            }
+            current = addr.pointee.ifa_next
+        }
+        return fallback
     }
 }
