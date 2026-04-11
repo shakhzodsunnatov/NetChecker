@@ -74,9 +74,9 @@ public struct MCPDashboardView: View {
                 }
 
                 HStack {
-                    Label("Подключений", systemImage: "person.2")
+                    Label("Запросов", systemImage: "arrow.down.circle")
                     Spacer()
-                    Text("\(server.activeConnections)")
+                    Text("\(server.requestCount)")
                         .foregroundColor(.secondary)
                 }
             }
