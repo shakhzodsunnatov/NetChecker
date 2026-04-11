@@ -50,6 +50,26 @@ public struct MCPLogEntry: Codable, Sendable {
         self.severity = severity
         self.tags = tags
     }
+
+    // MARK: - Кастомный декодер (допускает отсутствие id и timestamp)
+
+    private enum CodingKeys: String, CodingKey {
+        case id, timestamp, operationType, source, flowContext
+        case payload, expectations, severity, tags
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id            = try c.decodeIfPresent(UUID.self,            forKey: .id)            ?? UUID()
+        timestamp     = try c.decodeIfPresent(Date.self,            forKey: .timestamp)     ?? Date()
+        operationType = try c.decode(MCPOperationType.self,         forKey: .operationType)
+        source        = try c.decode(MCPSourceInfo.self,            forKey: .source)
+        flowContext   = try c.decodeIfPresent(MCPFlowContext.self,  forKey: .flowContext)
+        payload       = try c.decode(MCPPayload.self,               forKey: .payload)
+        expectations  = try c.decodeIfPresent(MCPExpectations.self, forKey: .expectations)
+        severity      = try c.decodeIfPresent(MCPSeverity.self,     forKey: .severity)      ?? .info
+        tags          = try c.decodeIfPresent([String].self,        forKey: .tags)          ?? []
+    }
 }
 
 // MARK: - Источник
@@ -112,6 +132,27 @@ public struct MCPFlowContext: Codable, Sendable, Hashable {
         self.flowDescription = flowDescription
         self.sequenceNumber = sequenceNumber
         self.parentFlowId = parentFlowId
+    }
+
+    // MARK: - Кастомный декодер: принимает и UUID, и произвольную строку
+
+    private enum CodingKeys: String, CodingKey {
+        case flowId, flowName, flowDescription, sequenceNumber, parentFlowId
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        // flowId может быть UUID-строкой или любым строковым идентификатором
+        let rawId = try c.decode(String.self, forKey: .flowId)
+        flowId = UUID(uuidString: rawId) ?? UUID.deterministicUUID(from: rawId)
+        flowName        = try c.decodeIfPresent(String.self, forKey: .flowName)        ?? rawId
+        flowDescription = try c.decodeIfPresent(String.self, forKey: .flowDescription)
+        sequenceNumber  = try c.decodeIfPresent(Int.self,    forKey: .sequenceNumber)  ?? 0
+        if let rawParent = try c.decodeIfPresent(String.self, forKey: .parentFlowId) {
+            parentFlowId = UUID(uuidString: rawParent) ?? UUID.deterministicUUID(from: rawParent)
+        } else {
+            parentFlowId = nil
+        }
     }
 }
 
@@ -348,5 +389,38 @@ public struct MCPViolation: Codable, Sendable, Hashable {
         self.expected = expected
         self.actual = actual
         self.severity = severity
+    }
+}
+
+// MARK: - UUID из произвольной строки
+
+extension UUID {
+    /// Генерирует детерминированный UUID из произвольной строки через хэш (не RFC 4122 namespace, но стабильный).
+    static func deterministicUUID(from string: String) -> UUID {
+        let bytes = string.utf8
+        var hash: (UInt64, UInt64) = (0xcbf29ce484222325, 0xcbf29ce484222325)
+        for byte in bytes {
+            hash.0 ^= UInt64(byte)
+            hash.0 &*= 0x100000001b3
+            hash.1 ^= UInt64(byte &+ 37)
+            hash.1 &*= 0x100000001b3
+        }
+        let a = UInt32(hash.0 >> 32)
+        let b = UInt16((hash.0 >> 16) & 0xffff)
+        let c = UInt16(((hash.0 & 0x0fff)) | 0x4000) // version 4
+        let d = UInt16((hash.1 >> 48) & 0x3fff | 0x8000) // variant bits
+        let e0 = UInt8((hash.1 >> 40) & 0xff)
+        let e1 = UInt8((hash.1 >> 32) & 0xff)
+        let e2 = UInt8((hash.1 >> 24) & 0xff)
+        let e3 = UInt8((hash.1 >> 16) & 0xff)
+        let e4 = UInt8((hash.1 >> 8) & 0xff)
+        let e5 = UInt8(hash.1 & 0xff)
+        return UUID(uuid: (
+            UInt8(a >> 24), UInt8((a >> 16) & 0xff), UInt8((a >> 8) & 0xff), UInt8(a & 0xff),
+            UInt8(b >> 8), UInt8(b & 0xff),
+            UInt8(c >> 8), UInt8(c & 0xff),
+            UInt8(d >> 8), UInt8(d & 0xff),
+            e0, e1, e2, e3, e4, e5
+        ))
     }
 }

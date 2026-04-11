@@ -26,6 +26,27 @@ struct MCPHTTPRequest: Sendable {
         }
         return nil
     }
+
+    /// Путь без query string
+    var cleanPath: String {
+        path.components(separatedBy: "?").first ?? path
+    }
+
+    /// Query-параметры
+    private var queryParams: [String: String] {
+        guard let query = path.components(separatedBy: "?").dropFirst().first else { return [:] }
+        var params: [String: String] = [:]
+        for pair in query.components(separatedBy: "&") {
+            let kv = pair.components(separatedBy: "=")
+            if kv.count == 2 {
+                params[kv[0]] = kv[1].removingPercentEncoding ?? kv[1]
+            }
+        }
+        return params
+    }
+
+    func queryString(_ key: String) -> String? { queryParams[key] }
+    func queryInt(_ key: String) -> Int? { queryParams[key].flatMap { Int($0) } }
 }
 
 /// HTTP-ответ для MCP-клиента

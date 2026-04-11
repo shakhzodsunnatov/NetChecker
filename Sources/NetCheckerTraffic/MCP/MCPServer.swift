@@ -190,7 +190,7 @@ public final class MCPServer: ObservableObject {
 
         // Обработка запроса на MainActor (для доступа к TrafficStore)
         Task { @MainActor in
-            let response = self.router.handle(request)
+            let response = await self.router.handle(request)
             self.requestCount += 1
             self.sendResponse(response, on: connection)
         }

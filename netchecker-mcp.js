@@ -6,6 +6,9 @@
 // Auto-discovery: tries localhost:9876 first (simulator/iproxy),
 // then NETCHECKER_URL env var (real device Wi-Fi IP)
 
+const { randomUUID } = require('crypto');
+const crypto = { randomUUID };
+
 const URLS = [
     'http://localhost:9876',
     process.env.NETCHECKER_URL
@@ -128,6 +131,78 @@ const TOOLS = [
         name: 'netchecker_status',
         description: 'Check if NetChecker MCP server is running on the device',
         inputSchema: { type: 'object', properties: {} }
+    },
+    {
+        name: 'netchecker_list',
+        description: 'Get the list of recorded HTTP requests and AI tool operations from NetChecker. Use this to review what API calls were made, check for errors, or understand what the app has been doing.',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                limit: { type: 'number', description: 'Max records to return (default 50, max 200)' },
+                filter: {
+                    type: 'string',
+                    enum: ['all', 'mcp', 'errors'],
+                    description: 'all = everything, mcp = only AI tool logs, errors = only failed requests',
+                    default: 'all'
+                }
+            }
+        }
+    },
+    {
+        name: 'netchecker_get_record',
+        description: 'Get full details of a single request by its ID (including request/response headers and body)',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                recordId: { type: 'string', description: 'Record ID from netchecker_list' }
+            },
+            required: ['recordId']
+        }
+    },
+    {
+        name: 'netchecker_clear',
+        description: 'Clear all recorded traffic from NetChecker. Use before starting a new test session.',
+        inputSchema: { type: 'object', properties: {} }
+    },
+    {
+        name: 'netchecker_execute',
+        description: 'Execute an HTTP request THROUGH the iOS/macOS device. The device makes the request using its own network stack (with real auth tokens, cookies, certificates). Returns the full response. Use this to test APIs without needing to authenticate — the app already has the session.',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                url: { type: 'string', description: 'Full URL to request' },
+                method: { type: 'string', description: 'HTTP method (GET, POST, PUT, DELETE)', default: 'GET' },
+                headers: {
+                    type: 'object',
+                    description: 'Additional HTTP headers',
+                    additionalProperties: { type: 'string' }
+                },
+                body: { type: 'string', description: 'Request body (for POST/PUT)' },
+                timeoutSeconds: { type: 'number', description: 'Timeout in seconds (default 30)' }
+            },
+            required: ['url']
+        }
+    },
+    {
+        name: 'netchecker_triggers',
+        description: 'List all available triggers (app actions) that AI can invoke remotely. Triggers are registered by the app developer to expose specific actions like "refresh data", "navigate to screen", "start login flow", etc.',
+        inputSchema: { type: 'object', properties: {} }
+    },
+    {
+        name: 'netchecker_trigger',
+        description: 'Invoke a registered trigger (app action) by its tag. Use netchecker_triggers to see available triggers first. This lets AI remotely control the app: navigate screens, trigger API calls, refresh data, test flows.',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                tag: { type: 'string', description: 'Trigger tag from netchecker_triggers' },
+                params: {
+                    type: 'object',
+                    description: 'Parameters for the trigger',
+                    additionalProperties: { type: 'string' }
+                }
+            },
+            required: ['tag']
+        }
     }
 ];
 
@@ -141,6 +216,8 @@ async function handleToolCall(id, params) {
 
         if (name === 'netchecker_log') {
             const body = {
+                id: crypto.randomUUID(),
+                timestamp: new Date().toISOString().replace(/\.\d{3}Z$/, 'Z'),
                 operationType: args.operationType,
                 source: { toolName: 'claude-code', sessionId: args.sessionId || 'claude-code-session' },
                 severity: args.severity || 'info',
@@ -150,20 +227,26 @@ async function handleToolCall(id, params) {
             if (args.flowId) {
                 body.flowContext = {
                     flowId: args.flowId,
-                    ...(args.sequenceNumber !== undefined && { sequenceNumber: args.sequenceNumber })
+                    flowName: args.flowId,
+                    sequenceNumber: args.sequenceNumber ?? 0
                 };
             }
 
-            // Build payload based on operation type
+            // Build payload — Swift expects { type, data: { ...fields } }
             if (args.url) {
                 body.payload = {
                     type: 'networkCall',
-                    url: args.url,
-                    method: args.method || 'GET',
-                    ...(args.statusCode !== undefined && { statusCode: args.statusCode })
+                    data: {
+                        url: args.url,
+                        method: args.method || 'GET',
+                        ...(args.statusCode !== undefined && { statusCode: args.statusCode })
+                    }
                 };
-            } else if (args.description) {
-                body.payload = { type: 'raw', data: args.description };
+            } else {
+                body.payload = {
+                    type: 'raw',
+                    data: args.description || args.operationType
+                };
             }
 
             // Add expectations if provided
@@ -191,6 +274,35 @@ async function handleToolCall(id, params) {
 
         } else if (name === 'netchecker_status') {
             result = await httpGet(`${NETCHECKER_URL}/status`);
+
+        } else if (name === 'netchecker_list') {
+            const limit = args.limit || 50;
+            const filter = args.filter || 'all';
+            result = await httpGet(`${NETCHECKER_URL}/records?limit=${limit}&filter=${filter}`);
+
+        } else if (name === 'netchecker_get_record') {
+            result = await httpGet(`${NETCHECKER_URL}/records/${args.recordId}`);
+
+        } else if (name === 'netchecker_clear') {
+            result = await httpDelete(`${NETCHECKER_URL}/records`);
+
+        } else if (name === 'netchecker_execute') {
+            result = await httpPost(`${NETCHECKER_URL}/execute`, {
+                url: args.url,
+                method: args.method || 'GET',
+                headers: args.headers || {},
+                body: args.body,
+                timeoutSeconds: args.timeoutSeconds || 30
+            });
+
+        } else if (name === 'netchecker_triggers') {
+            result = await httpGet(`${NETCHECKER_URL}/triggers`);
+
+        } else if (name === 'netchecker_trigger') {
+            result = await httpPost(`${NETCHECKER_URL}/trigger`, {
+                tag: args.tag,
+                params: args.params || {}
+            });
         }
 
         respond(id, {
@@ -253,7 +365,7 @@ function httpGet(url) {
         const req = http.get({
             hostname: u.hostname,
             port: u.port || 80,
-            path: u.pathname
+            path: u.pathname + (u.search || '')
         }, (res) => {
             let out = '';
             res.on('data', c => out += c);
@@ -264,6 +376,30 @@ function httpGet(url) {
 
         req.on('error', reject);
         req.setTimeout(5000, () => req.destroy(new Error('timeout after 5s')));
+    });
+}
+
+function httpDelete(url) {
+    return new Promise((resolve, reject) => {
+        const http = require('http');
+        const u = new URL(url);
+
+        const req = http.request({
+            hostname: u.hostname,
+            port: u.port || 80,
+            path: u.pathname,
+            method: 'DELETE'
+        }, (res) => {
+            let out = '';
+            res.on('data', c => out += c);
+            res.on('end', () => {
+                try { resolve(JSON.parse(out)); } catch { resolve({ ok: true }); }
+            });
+        });
+
+        req.on('error', reject);
+        req.setTimeout(5000, () => req.destroy(new Error('timeout after 5s')));
+        req.end();
     });
 }
 
