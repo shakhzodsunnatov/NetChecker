@@ -79,17 +79,21 @@ public struct ShareButton: View {
             return
         }
 
+        // Найти самый верхний VC (чтобы не упасть если уже есть presented)
+        var topVC = rootVC
+        while let presented = topVC.presentedViewController { topVC = presented }
+
         let activityVC = UIActivityViewController(
             activityItems: items,
             applicationActivities: nil
         )
 
         if let popover = activityVC.popoverPresentationController {
-            popover.sourceView = rootVC.view
-            popover.sourceRect = CGRect(x: rootVC.view.bounds.midX, y: rootVC.view.bounds.midY, width: 0, height: 0)
+            popover.sourceView = topVC.view
+            popover.sourceRect = CGRect(x: topVC.view.bounds.midX, y: topVC.view.bounds.midY, width: 0, height: 0)
         }
 
-        rootVC.present(activityVC, animated: true)
+        topVC.present(activityVC, animated: true)
         #endif
     }
 }
@@ -99,70 +103,97 @@ public struct ShareButton: View {
 public struct ExportMenuButton: View {
     let record: TrafficRecord
 
+    @State private var copiedLabel: String?
+    @State private var showShareSheet = false
+    @State private var shareItems: [Any] = []
+
     public init(record: TrafficRecord) {
         self.record = record
     }
 
     public var body: some View {
         Menu {
+            // Share (система)
             Button {
-                copyFullAPI()
+                let text = buildFullAPI()
+                shareItems = [text]
+                showShareSheet = true
             } label: {
-                Label("Copy Full API", systemImage: "doc.on.doc")
+                Label("Share Full API", systemImage: "square.and.arrow.up")
             }
 
             Divider()
 
             Button {
-                shareText(CURLFormatter.format(record: record))
+                copyWithFeedback(CURLFormatter.format(record: record), label: "cURL")
             } label: {
-                Label("Copy as cURL", systemImage: "terminal")
+                Label(copiedLabel == "cURL" ? "Copied!" : "Copy as cURL", systemImage: copiedLabel == "cURL" ? "checkmark" : "terminal")
             }
 
             Button {
-                if let harData = HARFormatter.format(records: [record]),
-                   let har = String(data: harData, encoding: .utf8) {
-                    shareText(har)
+                copyWithFeedback(record.url.absoluteString, label: "URL")
+            } label: {
+                Label(copiedLabel == "URL" ? "Copied!" : "Copy URL", systemImage: copiedLabel == "URL" ? "checkmark" : "link")
+            }
+
+            Button {
+                copyWithFeedback(buildFullAPI(), label: "Full")
+            } label: {
+                Label(copiedLabel == "Full" ? "Copied!" : "Copy Full API", systemImage: copiedLabel == "Full" ? "checkmark" : "doc.on.doc")
+            }
+
+            if let harData = HARFormatter.format(records: [record]),
+               let har = String(data: harData, encoding: .utf8) {
+                Button {
+                    copyWithFeedback(har, label: "HAR")
+                } label: {
+                    Label(copiedLabel == "HAR" ? "Copied!" : "Copy as HAR", systemImage: copiedLabel == "HAR" ? "checkmark" : "doc.text")
                 }
-            } label: {
-                Label("Export as HAR", systemImage: "doc.text")
-            }
-
-            Divider()
-
-            Button {
-                shareURL()
-            } label: {
-                Label("Copy URL", systemImage: "link")
             }
 
             if let body = record.request.bodyString {
+                Divider()
                 Button {
-                    shareText(body)
+                    copyWithFeedback(body, label: "ReqBody")
                 } label: {
-                    Label("Copy Request Body", systemImage: "doc")
+                    Label(copiedLabel == "ReqBody" ? "Copied!" : "Copy Request Body", systemImage: copiedLabel == "ReqBody" ? "checkmark" : "doc")
                 }
             }
 
             if let body = record.response?.bodyString {
                 Button {
-                    shareText(body)
+                    copyWithFeedback(body, label: "ResBody")
                 } label: {
-                    Label("Copy Response Body", systemImage: "doc.fill")
+                    Label(copiedLabel == "ResBody" ? "Copied!" : "Copy Response Body", systemImage: copiedLabel == "ResBody" ? "checkmark" : "doc.fill")
                 }
             }
         } label: {
-            Image(systemName: "square.and.arrow.up")
+            if let copiedLabel, !copiedLabel.isEmpty {
+                Label("Copied!", systemImage: "checkmark")
+                    .foregroundStyle(.green)
+            } else {
+                Image(systemName: "square.and.arrow.up")
+            }
         }
+        #if os(iOS)
+        .sheet(isPresented: $showShareSheet) {
+            ActivityViewControllerRepresentable(items: shareItems, excludedTypes: nil)
+                .presentationDetents([.medium, .large])
+        }
+        #endif
     }
 
-    private func shareText(_ text: String) {
+    private func copyWithFeedback(_ text: String, label: String) {
         #if canImport(UIKit)
         UIPasteboard.general.string = text
         #elseif canImport(AppKit)
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(text, forType: .string)
         #endif
+        withAnimation { copiedLabel = label }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+            withAnimation { copiedLabel = nil }
+        }
     }
 
     private func shareURL() {
@@ -174,7 +205,11 @@ public struct ExportMenuButton: View {
         #endif
     }
 
-    private func copyFullAPI() {
+    private func buildFullAPI() -> String { copyFullAPI() }
+
+
+    @discardableResult
+    private func copyFullAPI() -> String {
         var output = ""
 
         // Request Section
@@ -243,7 +278,7 @@ public struct ExportMenuButton: View {
             }
         }
 
-        shareText(output)
+        return output
     }
 
     private func formatJSONIfPossible(_ text: String) -> String {

@@ -11,6 +11,7 @@ public struct NetCheckerTrafficUI_TrafficListView: View {
     @State private var searchText = ""
     @State private var showingFilters = false
     @State private var showingStatistics = false
+    @State private var showCopiedToast = false
 
     public init() {}
 
@@ -97,6 +98,28 @@ public struct NetCheckerTrafficUI_TrafficListView: View {
                     NetCheckerTrafficUI_TrafficStatisticsView(records: filteredRecords)
                 }
             }
+            .overlay(alignment: .top) {
+                if showCopiedToast {
+                    Text("Copied!")
+                        .font(.subheadline)
+                        .fontWeight(.medium)
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 20)
+                        .padding(.vertical, 10)
+                        .background(Capsule().fill(.green))
+                        .shadow(color: .green.opacity(0.3), radius: 10)
+                        .transition(.move(edge: .top).combined(with: .opacity))
+                        .padding(.top, 8)
+                }
+            }
+            .animation(.spring(duration: 0.3), value: showCopiedToast)
+            .onChange(of: showCopiedToast) { newValue in
+                if newValue {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                        showCopiedToast = false
+                    }
+                }
+            }
         }
     }
 
@@ -175,13 +198,24 @@ public struct NetCheckerTrafficUI_TrafficListView: View {
             #if canImport(UIKit)
             UIPasteboard.general.string = har
             #endif
+            showCopiedToast = true
         }
     }
 
     private func exportSingleRecord(_ record: TrafficRecord) {
         let curl = CURLFormatter.format(record: record)
-        #if canImport(UIKit)
-        UIPasteboard.general.string = curl
+        #if os(iOS)
+        let activityVC = UIActivityViewController(activityItems: [curl], applicationActivities: nil)
+        if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+           let rootVC = windowScene.windows.first?.rootViewController {
+            var topVC = rootVC
+            while let presented = topVC.presentedViewController { topVC = presented }
+            if let popover = activityVC.popoverPresentationController {
+                popover.sourceView = topVC.view
+                popover.sourceRect = CGRect(x: topVC.view.bounds.midX, y: topVC.view.bounds.midY, width: 0, height: 0)
+            }
+            topVC.present(activityVC, animated: true)
+        }
         #endif
     }
 }
