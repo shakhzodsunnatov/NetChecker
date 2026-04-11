@@ -77,6 +77,11 @@ public struct InterceptorConfiguration: Sendable {
     /// Уведомлять при ошибках
     public var enableNotificationOnError: Bool
 
+    // MARK: - MCP
+
+    /// MCP конфигурация
+    public var mcp: MCPConfiguration
+
     // MARK: - Callbacks
 
     /// Динамическая фильтрация (вызывается для каждого запроса)
@@ -103,6 +108,7 @@ public struct InterceptorConfiguration: Sendable {
         redactQueryParams: Set<String>? = nil,
         redactionString: String = "***REDACTED***",
         ssl: SSLConfiguration = SSLConfiguration(),
+        mcp: MCPConfiguration = MCPConfiguration(),
         enableShakeGesture: Bool = true,
         showFloatingBadge: Bool = false,
         enableNotificationOnError: Bool = true,
@@ -126,6 +132,7 @@ public struct InterceptorConfiguration: Sendable {
         self.redactQueryParams = redactQueryParams ?? ["api_key", "apikey", "access_token", "secret", "key"]
         self.redactionString = redactionString
         self.ssl = ssl
+        self.mcp = mcp
         self.enableShakeGesture = enableShakeGesture
         self.showFloatingBadge = showFloatingBadge
         self.enableNotificationOnError = enableNotificationOnError
@@ -187,6 +194,35 @@ public enum InterceptionLevel: String, Sendable, CaseIterable {
         case .manual:
             return "Only intercepts explicitly configured sessions"
         }
+    }
+}
+
+// MARK: - MCP Configuration
+
+/// Конфигурация MCP-сервера
+public struct MCPConfiguration: Sendable {
+    /// Включён ли MCP-сервер
+    public var enabled: Bool
+
+    /// Порт сервера
+    public var port: UInt16
+
+    /// Максимальный размер payload (байты)
+    public var maxPayloadSize: Int
+
+    /// Включить валидацию схем
+    public var enableSchemaValidation: Bool
+
+    public init(
+        enabled: Bool = false,
+        port: UInt16 = 9876,
+        maxPayloadSize: Int = 5 * 1024 * 1024,
+        enableSchemaValidation: Bool = true
+    ) {
+        self.enabled = enabled
+        self.port = port
+        self.maxPayloadSize = maxPayloadSize
+        self.enableSchemaValidation = enableSchemaValidation
     }
 }
 

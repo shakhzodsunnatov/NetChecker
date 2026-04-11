@@ -215,6 +215,12 @@ struct TrafficRecordRow: View {
 
             // Right side info
             VStack(alignment: .trailing, spacing: 4) {
+                // MCP badge (если запись от AI-инструмента)
+                if let source = record.metadata.mcpSource {
+                    let hasViolations = record.metadata.tags.contains { $0.hasPrefix("violation:") }
+                    MCPIndicator(source: source, hasViolations: hasViolations)
+                }
+
                 // Status or state
                 if let statusCode = record.statusCode {
                     NetCheckerTrafficUI_StatusCodeBadge(statusCode: statusCode)

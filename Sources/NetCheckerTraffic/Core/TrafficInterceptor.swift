@@ -36,6 +36,9 @@ public final class TrafficInterceptor: ObservableObject {
     /// Environment store
     public let environmentStore = EnvironmentStore.shared
 
+    /// MCP сервер
+    public let mcpServer = MCPServer.shared
+
     // MARK: - Private Properties
 
     private var cancellables = Set<AnyCancellable>()
@@ -90,6 +93,11 @@ public final class TrafficInterceptor: ObservableObject {
             break
         }
 
+        // Автостарт MCP-сервера если включён в конфигурации
+        if configuration.mcp.enabled {
+            mcpServer.start(port: configuration.mcp.port)
+        }
+
         isRunning = true
         print("[NetChecker] Traffic interception started (level: \(configuration.level.rawValue))")
     }
@@ -97,6 +105,11 @@ public final class TrafficInterceptor: ObservableObject {
     /// Остановить перехват
     public func stop() {
         guard isRunning else { return }
+
+        // Остановить MCP-сервер если он запущен
+        if mcpServer.isRunning {
+            mcpServer.stop()
+        }
 
         // Update thread-safe state
         NetCheckerURLProtocol.setIntercepting(false)
@@ -123,6 +136,18 @@ public final class TrafficInterceptor: ObservableObject {
     /// Получить классы протоколов для ручной настройки
     public static func protocolClasses() -> [AnyClass] {
         [NetCheckerURLProtocol.self]
+    }
+
+    // MARK: - MCP Management
+
+    /// Запустить MCP-сервер для приёма логов от AI-инструментов
+    public func startMCP(port: UInt16 = 9876) {
+        mcpServer.start(port: port)
+    }
+
+    /// Остановить MCP-сервер
+    public func stopMCP() {
+        mcpServer.stop()
     }
 
     // MARK: - Environment Management

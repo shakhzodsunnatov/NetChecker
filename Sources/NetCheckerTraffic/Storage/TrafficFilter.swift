@@ -72,6 +72,14 @@ public struct TrafficFilter: Codable, Sendable {
     /// Исключить хосты
     public var excludeHosts: Set<String>?
 
+    // MARK: - MCP Filters
+
+    /// Только MCP-записи (от AI-инструментов)
+    public var onlyMCP: Bool = false
+
+    /// Фильтр по типам MCP-операций
+    public var mcpOperationTypes: Set<MCPOperationType>?
+
     // MARK: - Sorting
 
     /// Поле для сортировки
@@ -202,6 +210,20 @@ public struct TrafficFilter: Codable, Sendable {
         if let excludeHosts = excludeHosts, !excludeHosts.isEmpty {
             let lowercasedHosts = Set(excludeHosts.map { $0.lowercased() })
             result = result.filter { !lowercasedHosts.contains($0.host.lowercased()) }
+        }
+
+        // MCP filter
+        if onlyMCP {
+            result = result.filter { $0.metadata.mcpSource != nil }
+        }
+
+        // MCP operation types
+        if let mcpTypes = mcpOperationTypes, !mcpTypes.isEmpty {
+            result = result.filter { record in
+                record.metadata.tags.contains { tag in
+                    mcpTypes.contains { $0.rawValue == tag }
+                }
+            }
         }
 
         // Sorting
@@ -358,6 +380,21 @@ public extension TrafficFilter {
     static func host(_ host: String) -> TrafficFilter {
         var filter = TrafficFilter()
         filter.host = host
+        return filter
+    }
+
+    /// Только MCP-записи
+    static var mcpOnly: TrafficFilter {
+        var filter = TrafficFilter()
+        filter.onlyMCP = true
+        return filter
+    }
+
+    /// MCP-записи конкретного типа
+    static func mcpType(_ type: MCPOperationType) -> TrafficFilter {
+        var filter = TrafficFilter()
+        filter.onlyMCP = true
+        filter.mcpOperationTypes = [type]
         return filter
     }
 }

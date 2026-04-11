@@ -73,6 +73,12 @@ public struct NetCheckerConfiguration {
     /// Whether breakpoints are enabled by default. Default is `false`.
     public var enableBreakpoints: Bool
 
+    /// Автоматически запустить MCP-сервер для приёма логов от AI-инструментов. Default is `false`.
+    public var enableMCP: Bool
+
+    /// Порт MCP-сервера. Default is `9876`.
+    public var mcpPort: UInt16
+
     /// Environment groups to setup
     public var environmentGroups: [EnvironmentGroup]
 
@@ -89,6 +95,8 @@ public struct NetCheckerConfiguration {
         startInterceptor: Bool = true,
         enableMocking: Bool = false,
         enableBreakpoints: Bool = false,
+        enableMCP: Bool = false,
+        mcpPort: UInt16 = 9876,
         environmentGroups: [EnvironmentGroup] = [],
         hapticFeedback: Bool = true,
         interceptionLevel: InterceptionLevel = .full
@@ -96,6 +104,8 @@ public struct NetCheckerConfiguration {
         self.startInterceptor = startInterceptor
         self.enableMocking = enableMocking
         self.enableBreakpoints = enableBreakpoints
+        self.enableMCP = enableMCP
+        self.mcpPort = mcpPort
         self.environmentGroups = environmentGroups
         self.hapticFeedback = hapticFeedback
         self.interceptionLevel = interceptionLevel
@@ -129,7 +139,19 @@ struct TrafficInspectorModifier: ViewModifier {
         if config.startInterceptor {
             Task { @MainActor in
                 if !TrafficInterceptor.shared.isRunning {
-                    TrafficInterceptor.shared.start(level: config.interceptionLevel)
+                    // Передаём MCP-настройки через InterceptorConfiguration
+                    var interceptorConfig = InterceptorConfiguration.default
+                    interceptorConfig.level = config.interceptionLevel
+                    interceptorConfig.mcp.enabled = config.enableMCP
+                    interceptorConfig.mcp.port = config.mcpPort
+                    TrafficInterceptor.shared.start(configuration: interceptorConfig)
+                }
+            }
+        } else if config.enableMCP {
+            // Если interceptor не нужен, но MCP включён — запустить только MCP
+            Task { @MainActor in
+                if !MCPServer.shared.isRunning {
+                    MCPServer.shared.start(port: config.mcpPort)
                 }
             }
         }
@@ -284,6 +306,21 @@ struct TrafficInspectorSheet: View {
             .tag(2)
             .tabItem {
                 Label("Breakpoints", systemImage: "hand.raised")
+            }
+
+            NavigationStack {
+                MCPDashboardView()
+                    .toolbar {
+                        ToolbarItem(placement: .cancellationAction) {
+                            Button("Done") {
+                                dismiss()
+                            }
+                        }
+                    }
+            }
+            .tag(3)
+            .tabItem {
+                Label("MCP", systemImage: "antenna.radiowaves.left.and.right")
             }
 
             NavigationStack {
