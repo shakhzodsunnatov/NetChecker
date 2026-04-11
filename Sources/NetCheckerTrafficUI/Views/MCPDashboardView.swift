@@ -174,42 +174,33 @@ public struct MCPDashboardView: View {
 
     private var quickStartSection: some View {
         Section {
-            VStack(alignment: .leading, spacing: 10) {
-                Text("Подключи AI-инструмент за 1 шаг")
-                    .font(.subheadline)
-                    .fontWeight(.semibold)
-
-                Text("Добавь в .mcp.json проекта:")
+            // Сниппет конфига
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Добавь в .mcp.json:")
                     .font(.caption)
                     .foregroundColor(.secondary)
-
                 Text(mcpConfigSnippet)
                     .font(.system(.caption2, design: .monospaced))
-                    .padding(8)
+                    .padding(6)
+                    .frame(maxWidth: .infinity, alignment: .leading)
                     .background(Color.secondary.opacity(0.1))
                     .cornerRadius(6)
-
-                Button {
-                    copyToClipboard(mcpConfigSnippet)
-                } label: {
-                    Label("Скопировать MCP конфиг", systemImage: "doc.on.doc")
-                        .font(.caption)
-                }
-
-                Divider()
-
-                Text("Или cURL:")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-
-                Button {
-                    copyToClipboard(exampleCURL)
-                } label: {
-                    Label("Скопировать cURL пример", systemImage: "terminal")
-                        .font(.caption)
-                }
             }
-            .padding(.vertical, 4)
+            .padding(.vertical, 2)
+
+            // Кнопка копирования конфига
+            Button {
+                copyToClipboard(mcpConfigSnippet)
+            } label: {
+                Label("Скопировать MCP конфиг", systemImage: "doc.on.doc")
+            }
+
+            // Кнопка копирования cURL
+            Button {
+                copyToClipboard(exampleCURL)
+            } label: {
+                Label("Скопировать cURL пример", systemImage: "terminal")
+            }
         } header: {
             Text("Быстрый старт")
         }
