@@ -75,6 +75,53 @@ public struct EditEnvironmentView: View {
                 }
             }
 
+            // Токен окружения.
+            // Физически лежит в headers, но вынесен отдельно: именно токеном
+            // окружения чаще всего и отличаются, а искать его среди прочих
+            // заголовков неудобно.
+            Section {
+                #if os(iOS)
+                TextField("Bearer …", text: tokenBinding, axis: .vertical)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                    .font(.system(.caption, design: .monospaced))
+                    .lineLimit(1...3)
+                #else
+                TextField("Bearer …", text: tokenBinding)
+                    .autocorrectionDisabled()
+                    .font(.system(.caption, design: .monospaced))
+                #endif
+
+                if !detectedTokens.isEmpty {
+                    ForEach(detectedTokens) { detected in
+                        Button {
+                            headers[detected.headerName] = detected.value
+                        } label: {
+                            HStack {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(detected.masked)
+                                        .font(.system(.caption, design: .monospaced))
+                                    Text("\(detected.headerName) · \(detected.host) · \(detected.occurrences) запросов")
+                                        .font(.caption2)
+                                        .foregroundStyle(.secondary)
+                                }
+                                Spacer()
+                                Image(systemName: "arrow.down.circle")
+                                    .foregroundStyle(Color.accentColor)
+                            }
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            } header: {
+                Text("Access Token")
+            } footer: {
+                Text(detectedTokens.isEmpty
+                     ? "Подставляется в заголовок Authorization при запросах к этому окружению."
+                     : "Ниже — токены, найденные в записанном трафике. Нажмите, чтобы подставить, вместо копирования вручную.")
+            }
+
             // SSL Mode section
             Section("SSL Trust Mode") {
                 Picker("SSL Mode", selection: $sslMode) {
@@ -193,6 +240,36 @@ public struct EditEnvironmentView: View {
         } message: {
             Text("This will permanently delete \"\(environment.name)\". This action cannot be undone.")
         }
+    }
+
+    /// Токен читается и пишется прямо в заголовки — отдельного поля хранения нет
+    private var tokenBinding: Binding<String> {
+        Binding(
+            get: {
+                for (key, value) in headers
+                where NetCheckerTrafficCore.Environment.tokenHeaderNames.contains(key.lowercased()) {
+                    return value
+                }
+                return ""
+            },
+            set: { newValue in
+                let existing = headers.keys.first {
+                    NetCheckerTrafficCore.Environment.tokenHeaderNames.contains($0.lowercased())
+                }
+
+                if newValue.isEmpty {
+                    if let existing = existing { headers.removeValue(forKey: existing) }
+                } else {
+                    headers[existing ?? "Authorization"] = newValue
+                }
+            }
+        )
+    }
+
+    /// Токены, найденные в записанном трафике для хоста этого окружения
+    private var detectedTokens: [DetectedToken] {
+        guard let host = URL(string: baseURL)?.host else { return [] }
+        return TokenDetector.detect(forHost: host)
     }
 
     private var isValidURL: Bool {

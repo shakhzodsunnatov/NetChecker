@@ -223,86 +223,64 @@ struct PresentationModifier: ViewModifier {
 
 struct TrafficInspectorSheet: View {
     @SwiftUI.Environment(\.dismiss) private var dismiss
-    @State private var selectedTab = 0
+    @ObservedObject private var features = InspectorFeatureSettings.shared
+    @State private var selection: String = InspectorFeature.traffic.rawValue
 
     var body: some View {
-        TabView(selection: $selectedTab) {
-            NavigationStack {
-                NetCheckerTrafficUI_TrafficListView()
-                    .toolbar {
-                        ToolbarItem(placement: .cancellationAction) {
-                            Button("Done") {
-                                dismiss()
+        TabView(selection: $selection) {
+            // Состав вкладок задаётся настройками: инспектор оброс разделами,
+            // а в конкретной работе нужны обычно два-три
+            ForEach(features.visible) { feature in
+                NavigationStack {
+                    screen(for: feature)
+                        .toolbar {
+                            ToolbarItem(placement: .cancellationAction) {
+                                Button("Done") { dismiss() }
                             }
                         }
-                    }
-            }
-            .tag(0)
-            .tabItem {
-                Label("Traffic", systemImage: "network")
-            }
-
-            NavigationStack {
-                NetCheckerTrafficUI_EnvironmentSwitcherView()
-                    .toolbar {
-                        ToolbarItem(placement: .cancellationAction) {
-                            Button("Done") {
-                                dismiss()
-                            }
-                        }
-                    }
-            }
-            .tag(1)
-            .tabItem {
-                Label("Environments", systemImage: "server.rack")
-            }
-
-            NavigationStack {
-                NetCheckerTrafficUI_MockRulesView()
-                    .toolbar {
-                        ToolbarItem(placement: .cancellationAction) {
-                            Button("Done") {
-                                dismiss()
-                            }
-                        }
-                    }
-            }
-            .tag(2)
-            .tabItem {
-                Label("Mocks", systemImage: "theatermasks")
-            }
-
-            NavigationStack {
-                NetCheckerTrafficUI_BreakpointRulesView()
-                    .toolbar {
-                        ToolbarItem(placement: .cancellationAction) {
-                            Button("Done") {
-                                dismiss()
-                            }
-                        }
-                    }
-            }
-            .tag(3)
-            .tabItem {
-                Label("Breakpoints", systemImage: "hand.raised")
+                }
+                .tag(feature.rawValue)
+                .tabItem {
+                    Label(feature.title, systemImage: feature.systemImage)
+                }
             }
 
             NavigationStack {
                 SettingsView()
                     .toolbar {
                         ToolbarItem(placement: .cancellationAction) {
-                            Button("Done") {
-                                dismiss()
-                            }
+                            Button("Done") { dismiss() }
                         }
                     }
             }
-            .tag(4)
+            .tag("settings")
             .tabItem {
                 Label("Settings", systemImage: "gear")
             }
         }
         .tint(.blue)
+        .onChange(of: features.hidden) { _ in
+            // Скрытая вкладка не должна оставаться выбранной
+            if selection != "settings",
+               let current = InspectorFeature(rawValue: selection),
+               !features.isVisible(current) {
+                selection = features.visible.first?.rawValue ?? "settings"
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func screen(for feature: InspectorFeature) -> some View {
+        switch feature {
+        case .traffic:
+            NetCheckerTrafficUI_TrafficListView()
+        case .environments:
+            NetCheckerTrafficUI_EnvironmentSwitcherView()
+        case .mocks:
+            NetCheckerTrafficUI_MockRulesView()
+        case .breakpoints:
+            NetCheckerTrafficUI_BreakpointRulesView()
+        }
     }
 }
 
@@ -385,12 +363,18 @@ struct SettingsView: View {
 
             Section {
                 NavigationLink {
+                    NetCheckerTrafficUI_FeatureVisibilityView()
+                } label: {
+                    Label("Разделы инспектора", systemImage: "square.grid.2x2")
+                }
+
+                NavigationLink {
                     NetCheckerTrafficUI_TagRulesView()
                 } label: {
                     Label("Flow Tags", systemImage: "tag")
                 }
             } footer: {
-                Text("Group related endpoints under one flow name, then filter the traffic list down to just that flow.")
+                Text("Скройте лишние вкладки и сгруппируйте связанные эндпоинты под именем потока, чтобы фильтровать список по одной фиче.")
             }
 
             Section("Mock Engine") {

@@ -311,63 +311,76 @@ struct EnvironmentRowView: View {
 
     var body: some View {
         Button(action: onSelect) {
-            HStack {
-                Text(environment.emoji)
-                    .font(.title2)
+            HStack(spacing: 12) {
+                // Активность читается по крупному индикатору слева, а не по
+                // мелкой галочке справа — с ней было неочевидно, что выбрано
+                ZStack {
+                    Circle()
+                        .fill(isActive ? Color.accentColor : Color.secondary.opacity(0.15))
+                        .frame(width: 34, height: 34)
 
-                VStack(alignment: .leading, spacing: 2) {
+                    if isActive {
+                        Image(systemName: "checkmark")
+                            .font(.system(size: 15, weight: .bold))
+                            .foregroundStyle(.white)
+                    } else {
+                        Text(environment.emoji)
+                            .font(.system(size: 17))
+                    }
+                }
+
+                VStack(alignment: .leading, spacing: 3) {
                     HStack(spacing: 6) {
                         Text(environment.name)
-                            .font(.subheadline)
-                            .fontWeight(.medium)
-                            .foregroundColor(.primary)
+                            .font(.body)
+                            .fontWeight(isActive ? .semibold : .regular)
+                            .foregroundStyle(.primary)
 
                         if environment.isDefault {
                             Text("Default")
                                 .font(.caption2)
-                                .padding(.horizontal, 4)
+                                .padding(.horizontal, 5)
                                 .padding(.vertical, 1)
-                                .background(Color.green.opacity(0.2))
-                                .foregroundColor(.green)
-                                .cornerRadius(3)
+                                .background(Color.secondary.opacity(0.15))
+                                .foregroundStyle(.secondary)
+                                .clipShape(Capsule())
                         }
                     }
 
-                    Text(environment.baseURL.absoluteString)
+                    // Хост вместо полного URL: схема и путь только шумят
+                    Text(environment.baseURL.host ?? environment.baseURL.absoluteString)
                         .font(.caption)
-                        .foregroundColor(.secondary)
+                        .foregroundStyle(.secondary)
                         .lineLimit(1)
 
-                    // Show badges for headers/variables
-                    if environment.hasHeaders || environment.hasVariables {
-                        HStack(spacing: 8) {
-                            if environment.hasHeaders {
-                                Label("\(environment.headers.count) headers", systemImage: "list.bullet")
-                                    .font(.caption2)
-                                    .foregroundColor(.secondary)
-                            }
-                            if environment.hasVariables {
-                                Label("\(environment.variables.count) vars", systemImage: "chevron.left.forwardslash.chevron.right")
-                                    .font(.caption2)
-                                    .foregroundColor(.secondary)
-                            }
+                    HStack(spacing: 10) {
+                        // Токен — то, ради чего окружения чаще всего и различают
+                        if let masked = environment.maskedToken {
+                            Label(masked, systemImage: "key.fill")
+                                .font(.caption2)
+                                .foregroundStyle(Color.accentColor)
+                                .lineLimit(1)
+                        } else {
+                            Label("Без токена", systemImage: "key")
+                                .font(.caption2)
+                                .foregroundStyle(.tertiary)
+                        }
+
+                        if environment.hasVariables {
+                            Label("\(environment.variables.count)", systemImage: "chevron.left.forwardslash.chevron.right")
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
                         }
                     }
                 }
 
-                Spacer()
-
-                if isActive {
-                    Image(systemName: "checkmark.circle.fill")
-                        .foregroundColor(.green)
-                        .font(.title3)
-                }
+                Spacer(minLength: 4)
 
                 Button {
                     onEdit()
                 } label: {
                     Image(systemName: "info.circle")
-                        .foregroundColor(.secondary)
+                        .foregroundStyle(.secondary)
                 }
                 .buttonStyle(.plain)
             }
@@ -377,6 +390,7 @@ struct EnvironmentRowView: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .listRowBackground(isActive ? Color.accentColor.opacity(0.08) : nil)
     }
 }
 

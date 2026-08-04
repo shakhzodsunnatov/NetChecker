@@ -193,6 +193,61 @@ public struct Environment: Codable, Sendable, Identifiable, Hashable {
     }
 
     /// Has custom headers configured
+    // MARK: - Токен
+
+    /// Заголовки, в которых обычно живёт токен доступа
+    public static let tokenHeaderNames = ["authorization", "x-api-key", "x-auth-token", "api-key"]
+
+    /// Токен окружения — значение первого найденного заголовка авторизации.
+    ///
+    /// Токен физически хранится в `headers`: перехватчик и так подставляет их
+    /// в запрос, поэтому отдельного механизма не нужно. Это свойство лишь
+    /// даёт ему имя, чтобы токен можно было показать и отредактировать
+    /// как самостоятельную сущность, а не искать среди прочих заголовков.
+    public var token: String? {
+        get {
+            for (key, value) in headers where Self.tokenHeaderNames.contains(key.lowercased()) {
+                return value
+            }
+            return nil
+        }
+        set {
+            let existing = headers.keys.first { Self.tokenHeaderNames.contains($0.lowercased()) }
+
+            guard let newValue = newValue, !newValue.isEmpty else {
+                if let existing = existing { headers.removeValue(forKey: existing) }
+                return
+            }
+
+            headers[existing ?? "Authorization"] = newValue
+        }
+    }
+
+    /// Имя заголовка, в котором лежит токен
+    public var tokenHeaderName: String? {
+        headers.keys.first { Self.tokenHeaderNames.contains($0.lowercased()) }
+    }
+
+    /// У окружения задан свой токен
+    public var hasToken: Bool {
+        token?.isEmpty == false
+    }
+
+    /// Токен для показа: середина скрыта, начало и конец видны,
+    /// чтобы отличить один токен от другого, не раскрывая его целиком
+    public var maskedToken: String? {
+        guard let token = token, !token.isEmpty else { return nil }
+
+        // Схема вроде "Bearer " остаётся видимой — она не секрет
+        let parts = token.split(separator: " ", maxSplits: 1, omittingEmptySubsequences: false)
+        let scheme = parts.count == 2 ? String(parts[0]) + " " : ""
+        let secret = parts.count == 2 ? String(parts[1]) : token
+
+        guard secret.count > 10 else { return scheme + String(repeating: "•", count: max(secret.count, 3)) }
+
+        return scheme + secret.prefix(4) + "…" + secret.suffix(4)
+    }
+
     public var hasHeaders: Bool {
         !headers.isEmpty
     }

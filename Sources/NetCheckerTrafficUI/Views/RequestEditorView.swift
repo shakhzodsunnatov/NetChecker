@@ -16,6 +16,7 @@ public struct NetCheckerTrafficUI_RequestEditorView: View {
 
     // State
     @State private var isLoading = false
+    @State private var responseDuration: TimeInterval = 0
     @State private var response: ResponseData?
     @State private var responseError: String?
     @State private var showingAddHeader = false
@@ -240,6 +241,40 @@ public struct NetCheckerTrafficUI_RequestEditorView: View {
                     }
                 }
 
+                // Отправка вынесена в тело формы отдельной секцией.
+                // Раньше «Send» жил в слоте confirmationAction тулбара — там,
+                // где система показывает «Готово», поэтому кнопка читалась как
+                // сохранение, а не как отправка запроса.
+                Section {
+                    Button {
+                        sendRequest()
+                    } label: {
+                        HStack {
+                            Spacer()
+                            if isLoading {
+                                ProgressView()
+                                    .controlSize(.small)
+                                Text("Отправка…")
+                            } else {
+                                Image(systemName: response == nil && responseError == nil
+                                      ? "paperplane.fill"
+                                      : "arrow.clockwise")
+                                Text(response == nil && responseError == nil
+                                     ? "Отправить запрос"
+                                     : "Отправить снова")
+                            }
+                            Spacer()
+                        }
+                        .fontWeight(.semibold)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(isLoading || url.isEmpty)
+                    .listRowInsets(EdgeInsets())
+                    .listRowBackground(Color.clear)
+                } footer: {
+                    Text("Запрос уходит с изменёнными параметрами. Ответ появится ниже — уходить с экрана не нужно.")
+                }
+
                 // Response Section (after sending)
                 if let response = response {
                     Section("Response") {
@@ -247,6 +282,9 @@ public struct NetCheckerTrafficUI_RequestEditorView: View {
                             Text("Status")
                             Spacer()
                             NetCheckerTrafficUI_StatusCodeBadge(statusCode: response.statusCode)
+                            Text(String(format: "%.0f мс", responseDuration * 1000))
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
                         }
 
                         if let bodyString = response.bodyString {
@@ -292,16 +330,7 @@ public struct NetCheckerTrafficUI_RequestEditorView: View {
                 }
 
                 ToolbarItem(placement: .confirmationAction) {
-                    Button {
-                        sendRequest()
-                    } label: {
-                        if isLoading {
-                            ProgressView()
-                        } else {
-                            Text("Send")
-                        }
-                    }
-                    .disabled(isLoading || url.isEmpty)
+                    Button("Готово") { dismiss() }
                 }
             }
             .alert("Add Header", isPresented: $showingAddHeader) {
@@ -356,6 +385,7 @@ public struct NetCheckerTrafficUI_RequestEditorView: View {
         responseError = nil
 
         Task {
+            let startedAt = Date()
             do {
                 var request = URLRequest(url: requestURL)
                 request.httpMethod = method.rawValue
@@ -387,6 +417,7 @@ public struct NetCheckerTrafficUI_RequestEditorView: View {
                             body: data
                         )
                     }
+                    responseDuration = Date().timeIntervalSince(startedAt)
                     isLoading = false
                 }
             } catch {
