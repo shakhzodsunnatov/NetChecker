@@ -171,6 +171,7 @@ Switch between environments instantly:
 | 🎨 **Native SwiftUI** | Beautiful, responsive UI that feels right at home |
 | 💾 **Persistent Rules** | Mock rules and breakpoints survive app restarts |
 | 🚀 **Zero Dependencies** | Pure Swift — no third-party libraries required |
+| 🐢 **Network Conditions** | Simulate 3G, EDGE, flaky links or no connection at all |
 
 ---
 
@@ -665,10 +666,10 @@ TrafficInterceptor.shared.enableProxyMode(
 
 ## 🗺️ Roadmap
 
-- [x] Environment switching (2.0.0)
-- [ ] Network condition simulation — 3G, Edge, offline, packet loss (2.1.0)
-- [ ] HAR import and session replay (2.2.0)
-- [ ] WebSocket traffic inspection (3.0.0)
+- [x] Environment switching
+- [x] Network condition simulation — 3G, Edge, offline, packet loss
+- [ ] HAR import and session replay
+- [ ] WebSocket traffic inspection
 - [ ] gRPC support
 - [ ] Shared team mock configurations
 - [ ] Charles/Proxyman session import

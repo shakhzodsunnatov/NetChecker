@@ -313,6 +313,7 @@ struct SettingsView: View {
     @ObservedObject private var store = TrafficStore.shared
     @ObservedObject private var mockEngine = MockEngine.shared
     @ObservedObject private var breakpointEngine = BreakpointEngine.shared
+    @ObservedObject private var conditioner = NetworkConditioner.shared
 
     var body: some View {
         List {
@@ -350,6 +351,36 @@ struct SettingsView: View {
                         systemImage: interceptor.isRunning ? "stop.fill" : "play.fill"
                     )
                 }
+            }
+
+            Section {
+                Toggle("Simulate Conditions", isOn: $conditioner.isEnabled)
+
+                ForEach(conditioner.allProfiles) { profile in
+                    Button {
+                        conditioner.apply(profile)
+                    } label: {
+                        HStack {
+                            Text(profile.emoji)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(profile.name)
+                                    .foregroundColor(.primary)
+                                Text(profile.summary)
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                            Spacer()
+                            if conditioner.activeProfile.id == profile.id {
+                                Image(systemName: "checkmark")
+                                    .foregroundColor(.accentColor)
+                            }
+                        }
+                    }
+                }
+            } header: {
+                Text("Network Conditions")
+            } footer: {
+                Text("Applies to all intercepted traffic. Bandwidth limiting buffers the response body and releases it in timed chunks, so it approximates a slow link rather than reproducing it exactly.")
             }
 
             Section("Mock Engine") {

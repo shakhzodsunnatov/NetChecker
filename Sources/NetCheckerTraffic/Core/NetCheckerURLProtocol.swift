@@ -67,6 +67,30 @@ public final class NetCheckerURLProtocol: URLProtocol {
         }
     }
 
+    /// Ограничивать ли скорость доставки тела ответа.
+    /// Пишется на MainActor, читается в очереди делегата URLSession.
+    private var _shouldThrottleDownload: Bool = false
+    private let throttleLock = NSLock()
+
+    private var shouldThrottleDownload: Bool {
+        get {
+            throttleLock.lock()
+            defer { throttleLock.unlock() }
+            return _shouldThrottleDownload
+        }
+        set {
+            throttleLock.lock()
+            defer { throttleLock.unlock() }
+            _shouldThrottleDownload = newValue
+        }
+    }
+
+    /// Ответ придерживается до полной загрузки: либо ждёт брейкпоинт,
+    /// либо будет отдан порциями по бюджету скорости
+    private var isResponseHeld: Bool {
+        shouldPauseOnResponse || shouldThrottleDownload
+    }
+
     private lazy var session: URLSession = {
         let config = URLSessionConfiguration.default
         config.protocolClasses = [] // Prevent recursion
@@ -172,9 +196,35 @@ public final class NetCheckerURLProtocol: URLProtocol {
 
             TrafficStore.shared.add(record)
 
+            let conditions = NetworkConditionState.current
+
+            // Симуляция потери пакета — отбрасываем запрос до отправки
+            if conditions.shouldDropRequest() {
+                let lostError = NSError(
+                    domain: NSURLErrorDomain,
+                    code: NSURLErrorNetworkConnectionLost,
+                    userInfo: [NSLocalizedDescriptionKey: "Соединение потеряно (симуляция условий сети)"]
+                )
+                if let id = self.recordId {
+                    TrafficStore.shared.fail(id: id, error: lostError)
+                }
+                self.client?.urlProtocol(self, didFailWithError: lostError)
+                return
+            }
+
+            // Задержка правила .delay — ждём асинхронно, не блокируя поток загрузки
+            if let mockDelay = MockEngine.shared.matchDelay(request: mutableRequest as URLRequest) {
+                try? await Task.sleep(nanoseconds: UInt64(mockDelay * 1_000_000_000))
+            }
+
+            // Задержка условий сети
+            if conditions.isEnabled, conditions.latency > 0 {
+                try? await Task.sleep(nanoseconds: UInt64(conditions.latency * 1_000_000_000))
+            }
+
             // Check for mocks first
             if let mockResponse = MockEngine.shared.match(request: mutableRequest as URLRequest) {
-                self.handleMockResponse(mockResponse)
+                await self.handleMockResponse(mockResponse)
                 return
             }
 
@@ -217,6 +267,11 @@ public final class NetCheckerURLProtocol: URLProtocol {
                 self.shouldPauseOnResponse = true
             }
 
+            // При ограничении скорости тело придерживается и отдаётся порциями
+            if conditions.isEnabled, conditions.downloadBytesPerSecond != nil {
+                self.shouldThrottleDownload = true
+            }
+
             // Start the actual request on the URL loading queue
             self.dataTask = self.session.dataTask(with: mutableRequest as URLRequest)
             self.dataTask?.resume()
@@ -230,10 +285,10 @@ public final class NetCheckerURLProtocol: URLProtocol {
 
     // MARK: - Mock Handling
 
-    private func handleMockResponse(_ mockResponse: MockResponse) {
-        // Simulate delay if specified
+    private func handleMockResponse(_ mockResponse: MockResponse) async {
+        // Задержка мока — асинхронное ожидание вместо блокировки потока загрузки
         if let delay = mockResponse.delay, delay > 0 {
-            Thread.sleep(forTimeInterval: delay)
+            try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
         }
 
         // Create HTTP response
@@ -277,8 +332,8 @@ extension NetCheckerURLProtocol: URLSessionDataDelegate {
         completionHandler: @escaping (URLSession.ResponseDisposition) -> Void
     ) {
         receivedResponse = response as? HTTPURLResponse
-        // If response breakpoint is pending, don't forward to client yet
-        if !shouldPauseOnResponse {
+        // Ответ придерживается, если ждёт брейкпоинт или троттлинг
+        if !isResponseHeld {
             client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
         }
         completionHandler(.allow)
@@ -286,9 +341,43 @@ extension NetCheckerURLProtocol: URLSessionDataDelegate {
 
     public func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, didReceive data: Data) {
         receivedData.append(data)
-        // If response breakpoint is pending, accumulate data but don't forward yet
-        if !shouldPauseOnResponse {
+        // Накапливаем тело, но не отдаём, пока ответ придерживается
+        if !isResponseHeld {
             client?.urlProtocol(self, didLoad: data)
+        }
+    }
+
+    /// Отдать придержанный ответ клиенту.
+    /// При включённом ограничении скорости тело доставляется порциями.
+    private func deliverHeldResponse() async {
+        if let response = receivedResponse {
+            client?.urlProtocol(self, didReceive: response as URLResponse, cacheStoragePolicy: .notAllowed)
+        }
+
+        if !receivedData.isEmpty {
+            if shouldThrottleDownload {
+                for (chunk, delay) in NetworkConditionState.current.downloadChunks(for: receivedData) {
+                    if delay > 0 {
+                        try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+                    }
+                    client?.urlProtocol(self, didLoad: chunk)
+                }
+            } else {
+                client?.urlProtocol(self, didLoad: receivedData)
+            }
+        }
+
+        client?.urlProtocolDidFinishLoading(self)
+
+        if let id = recordId, let response = receivedResponse {
+            let body = Self.configSnapshot.captureResponseBody ? receivedData : nil
+            await MainActor.run {
+                TrafficStore.shared.complete(
+                    id: id,
+                    response: ResponseData(from: response, body: body),
+                    timings: nil
+                )
+            }
         }
     }
 
@@ -301,6 +390,12 @@ extension NetCheckerURLProtocol: URLSessionDataDelegate {
                 }
             }
             client?.urlProtocol(self, didFailWithError: error)
+        } else if shouldThrottleDownload && !shouldPauseOnResponse {
+            // Троттлинг без брейкпоинта: отдаём придержанное тело порциями
+            Task { [weak self] in
+                guard let self = self else { return }
+                await self.deliverHeldResponse()
+            }
         } else if shouldPauseOnResponse {
             // Response breakpoint: pause before delivering response to client
             Task { @MainActor [weak self] in
@@ -310,24 +405,7 @@ extension NetCheckerURLProtocol: URLSessionDataDelegate {
 
                 if result != nil {
                     // User resumed — deliver the held response to client
-                    if let response = self.receivedResponse {
-                        self.client?.urlProtocol(self, didReceive: response as URLResponse, cacheStoragePolicy: .notAllowed)
-                    }
-                    if !self.receivedData.isEmpty {
-                        self.client?.urlProtocol(self, didLoad: self.receivedData)
-                    }
-                    self.client?.urlProtocolDidFinishLoading(self)
-
-                    // Update traffic record
-                    if let id = self.recordId, let response = self.receivedResponse {
-                        let config = Self.configSnapshot
-                        let body = config.captureResponseBody ? self.receivedData : nil
-                        TrafficStore.shared.complete(
-                            id: id,
-                            response: ResponseData(from: response, body: body),
-                            timings: nil
-                        )
-                    }
+                    await self.deliverHeldResponse()
                 } else {
                     // User cancelled — deliver error instead
                     let cancelError = NSError(

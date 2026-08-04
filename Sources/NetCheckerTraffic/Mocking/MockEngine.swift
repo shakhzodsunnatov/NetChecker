@@ -84,13 +84,14 @@ public final class MockEngine: ObservableObject {
                 case .respond(let response):
                     return response
 
-                case .error(let mockError):
-                    // Return error as nil response - will be handled separately
+                case .error:
+                    // Ошибку отдаёт matchError(request:)
                     return nil
 
-                case .delay(let seconds):
-                    // Apply delay but let request through
-                    Thread.sleep(forTimeInterval: seconds)
+                case .delay:
+                    // Задержка не применяется здесь: блокировать поток загрузки нельзя.
+                    // Величину задержки возвращает matchDelay(request:), а ждёт её
+                    // NetCheckerURLProtocol в асинхронном контексте.
                     return nil
 
                 case .passthrough:
@@ -100,6 +101,22 @@ public final class MockEngine: ObservableObject {
                     // Will be handled when response comes back
                     return nil
                 }
+            }
+        }
+
+        return nil
+    }
+
+    /// Найти задержку, заданную правилом `.delay`, для запроса.
+    ///
+    /// Ожидание выполняет вызывающая сторона в асинхронном контексте —
+    /// движок никогда не блокирует поток.
+    public func matchDelay(request: URLRequest) -> TimeInterval? {
+        guard isEnabled else { return nil }
+
+        for rule in rules where rule.matches(request: request) {
+            if case .delay(let seconds) = rule.action {
+                return seconds > 0 ? seconds : nil
             }
         }
 
