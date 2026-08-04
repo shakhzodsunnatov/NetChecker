@@ -167,6 +167,7 @@ Switch between environments instantly:
 | 🔄 **Edit & Retry** | Modify any captured request and resend it instantly |
 | 📋 **Export to cURL** | Copy any request as a cURL command |
 | 📦 **HAR Export** | Export traffic sessions in standard HAR format |
+| 📥 **HAR Import** | Load a HAR from Chrome, Safari or Charles and replay it as mocks |
 | 🔐 **SSL Inspection** | View TLS version, cipher suites, and certificate chains |
 | 🎨 **Native SwiftUI** | Beautiful, responsive UI that feels right at home |
 | 💾 **Persistent Rules** | Mock rules and breakpoints survive app restarts |
@@ -668,7 +669,7 @@ TrafficInterceptor.shared.enableProxyMode(
 
 - [x] Environment switching
 - [x] Network condition simulation — 3G, Edge, offline, packet loss
-- [ ] HAR import and session replay
+- [x] HAR import and session replay
 - [ ] WebSocket traffic inspection
 - [ ] gRPC support
 - [ ] Shared team mock configurations

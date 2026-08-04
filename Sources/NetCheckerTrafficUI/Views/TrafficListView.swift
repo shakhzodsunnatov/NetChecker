@@ -12,6 +12,8 @@ public struct NetCheckerTrafficUI_TrafficListView: View {
     @State private var showingFilters = false
     @State private var showingStatistics = false
     @State private var showCopiedToast = false
+    @State private var showingImporter = false
+    @State private var importOutcome: HARImportOutcome?
 
     public init() {}
 
@@ -43,42 +45,7 @@ public struct NetCheckerTrafficUI_TrafficListView: View {
             .navigationTitle("Network Traffic")
             .toolbar {
                 ToolbarItem(placement: .primaryAction) {
-                    Menu {
-                        Button {
-                            if interceptor.isRunning {
-                                interceptor.stop()
-                            } else {
-                                interceptor.start()
-                            }
-                        } label: {
-                            Label(
-                                interceptor.isRunning ? "Pause Recording" : "Resume Recording",
-                                systemImage: interceptor.isRunning ? "pause.fill" : "play.fill"
-                            )
-                        }
-
-                        Button(role: .destructive) {
-                            store.clear()
-                        } label: {
-                            Label("Clear All", systemImage: "trash")
-                        }
-
-                        Divider()
-
-                        Button {
-                            showingStatistics = true
-                        } label: {
-                            Label("Statistics", systemImage: "chart.bar")
-                        }
-
-                        Button {
-                            exportHAR()
-                        } label: {
-                            Label("Export HAR", systemImage: "square.and.arrow.up")
-                        }
-                    } label: {
-                        Image(systemName: "ellipsis.circle")
-                    }
+                    actionsMenu
                 }
 
                 ToolbarItem(placement: .primaryAction) {
@@ -92,6 +59,18 @@ public struct NetCheckerTrafficUI_TrafficListView: View {
             }
             .sheet(isPresented: $showingFilters) {
                 FilterSheet(filter: $filter)
+            }
+            .fileImporter(
+                isPresented: $showingImporter,
+                allowedContentTypes: HARDocumentType.allowed,
+                allowsMultipleSelection: false
+            ) { result in
+                handleImport(result)
+            }
+            .alert(importOutcome?.title ?? "", isPresented: importAlertBinding) {
+                Button("OK", role: .cancel) { importOutcome = nil }
+            } message: {
+                Text(importOutcome?.message ?? "")
             }
             .sheet(isPresented: $showingStatistics) {
                 NavigationStack {
@@ -199,6 +178,85 @@ public struct NetCheckerTrafficUI_TrafficListView: View {
             UIPasteboard.general.string = har
             #endif
             showCopiedToast = true
+        }
+    }
+
+    /// Меню действий в тулбаре.
+    /// Вынесено из тела `body`: встроенным оно раздувало выражение до предела,
+    /// за которым компилятор перестаёт выводить типы за разумное время.
+    private var actionsMenu: some View {
+        Menu {
+            Button {
+                if interceptor.isRunning {
+                    interceptor.stop()
+                } else {
+                    interceptor.start()
+                }
+            } label: {
+                Label(
+                    interceptor.isRunning ? "Pause Recording" : "Resume Recording",
+                    systemImage: interceptor.isRunning ? "pause.fill" : "play.fill"
+                )
+            }
+
+            Button(role: .destructive) {
+                store.clear()
+            } label: {
+                Label("Clear All", systemImage: "trash")
+            }
+
+            Divider()
+
+            Button {
+                showingStatistics = true
+            } label: {
+                Label("Statistics", systemImage: "chart.bar")
+            }
+
+            Button {
+                exportHAR()
+            } label: {
+                Label("Export HAR", systemImage: "square.and.arrow.up")
+            }
+
+            Button {
+                showingImporter = true
+            } label: {
+                Label("Import HAR", systemImage: "square.and.arrow.down")
+            }
+        } label: {
+            Image(systemName: "ellipsis.circle")
+        }
+    }
+
+    /// Показ алерта завязан на наличие результата импорта
+    private var importAlertBinding: Binding<Bool> {
+        Binding(
+            get: { importOutcome != nil },
+            set: { if !$0 { importOutcome = nil } }
+        )
+    }
+
+    /// Обработать выбранный в пикере HAR-файл
+    private func handleImport(_ result: Result<[URL], Error>) {
+        switch result {
+        case .failure(let error):
+            importOutcome = .failure(error.localizedDescription)
+
+        case .success(let urls):
+            guard let url = urls.first else { return }
+
+            // Файл лежит вне песочницы приложения — нужен доступ к защищённому ресурсу
+            let needsScope = url.startAccessingSecurityScopedResource()
+            defer { if needsScope { url.stopAccessingSecurityScopedResource() } }
+
+            do {
+                let data = try Data(contentsOf: url)
+                let outcome = try HARImporter.importRecords(from: data)
+                importOutcome = .success(count: outcome.importedCount, fileName: url.lastPathComponent)
+            } catch {
+                importOutcome = .failure(error.localizedDescription)
+            }
         }
     }
 
