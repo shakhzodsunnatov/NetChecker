@@ -67,6 +67,17 @@ public final class TrafficInterceptor: ObservableObject {
             return
         }
 
+        // В Release перехват не запускается без явного разрешения.
+        // TestFlight — это Release, поэтому именно здесь проходит граница
+        // между сборкой для тестировщиков и сборкой в App Store.
+        guard configuration.isAllowedInCurrentBuild else {
+            print("""
+            [NetChecker] Перехват не запущен: сборка Release, \
+            а enableInRelease не выставлен. Установите его, если это TestFlight.
+            """)
+            return
+        }
+
         self.configuration = configuration
 
         // Update thread-safe state for URLProtocol access
@@ -75,6 +86,7 @@ public final class TrafficInterceptor: ObservableObject {
 
         // Configure store
         TrafficStore.shared.maxRecords = configuration.maxRecords
+        TrafficStore.shared.retentionPeriod = configuration.retentionPeriod
 
         // Register protocol based on level
         switch configuration.level {

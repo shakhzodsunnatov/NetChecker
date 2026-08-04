@@ -53,6 +53,12 @@
 | `TrafficMetadata.mcpSource` | none |
 | `TrafficFilter.onlyMCP` / `.mcpOperationTypes` | none |
 | `netchecker-mcp.js` bridge | none |
+| `InterceptorConfiguration.persistToDisk` | none — it was never implemented |
+
+Two behaviour changes to be aware of:
+
+- **`start()` no longer runs in Release builds by default.** Set `enableInRelease = true` to opt in. See [Keeping It Out of Production](#-keeping-it-out-of-production).
+- **`TrafficListView` no longer provides its own `NavigationStack`.** Wrap it yourself: `NavigationStack { TrafficListView() }`. Nesting it inside the inspector's own stack was swallowing toolbar buttons.
 
 Everything else is source-compatible with 1.3.0. If you need the MCP code, it remains available at tag [`1.3.0`](https://github.com/shakhzodsunnatov/NetChecker/tree/1.3.0).
 
@@ -247,8 +253,10 @@ struct ContentView: View {
             YourMainView()
                 .tabItem { Label("Home", systemImage: "house") }
 
-            TrafficListView()  // ← Add this tab
-                .tabItem { Label("Network", systemImage: "network") }
+            NavigationStack {          // ← the view no longer supplies its own
+                TrafficListView()
+            }
+            .tabItem { Label("Network", systemImage: "network") }
         }
         .onAppear {
             TrafficInterceptor.shared.start()
@@ -349,8 +357,8 @@ config.ignoreHosts = ["analytics.com", "crashlytics.com"]
 // Limit memory usage
 config.maxRecords = 500
 
-// Redact sensitive headers in logs
-config.redactedHeaders = ["Authorization", "X-API-Key"]
+// Redact sensitive headers at capture time
+config.redactHeaders = ["Authorization", "X-API-Key"]
 
 TrafficInterceptor.shared.start(configuration: config)
 ```
@@ -580,40 +588,77 @@ ZStack {
 
 ---
 
-## 🛡️ Best Practices
+## 🛡️ Keeping It Out of Production
 
-### Debug vs Release Builds
+This is the part to get right. **TestFlight builds use the Release configuration**, so `#if DEBUG` cannot be the thing that separates "my testers get the inspector" from "the App Store build does not". NetChecker draws that line explicitly instead.
 
-NetChecker works in both Debug and Release builds (including TestFlight). You control when to enable it:
+### The safety default
+
+`start()` refuses to run in a Release build unless you opt in:
 
 ```swift
-// Option 1: Debug only (recommended for most apps)
-#if DEBUG
-import NetCheckerTraffic
-#endif
-
-@main
-struct MyApp: App {
-    init() {
-        #if DEBUG
-        TrafficInterceptor.shared.start()
-        #endif
-    }
-}
-
-// Option 2: Enable in TestFlight for QA testing
-@main
-struct MyApp: App {
-    init() {
-        #if DEBUG || TESTFLIGHT
-        TrafficInterceptor.shared.start()
-        #endif
-    }
-}
-
-// Option 3: Always available (for internal/enterprise apps)
+// Debug: always works.
+// Release (TestFlight, App Store): does nothing, and logs why.
 TrafficInterceptor.shared.start()
 ```
+
+To enable it for TestFlight while leaving App Store builds untouched, gate the opt-in on a flag you control:
+
+```swift
+var config = InterceptorConfiguration()
+
+#if TESTFLIGHT
+config.enableInRelease = true      // your flag, your build configuration
+#endif
+
+TrafficInterceptor.shared.start(configuration: config)
+```
+
+Add `TESTFLIGHT` under **Build Settings → Swift Compiler → Active Compilation Conditions** for your TestFlight configuration only. The App Store configuration never defines it, so `enableInRelease` stays `false` and the interceptor never starts.
+
+### Cost when it is not started
+
+Until `start()` is called NetChecker registers no `URLProtocol`, installs no swizzling, allocates no storage and observes nothing. An app that links the package but never starts it pays no runtime cost on the request path.
+
+### Removing it from the binary entirely
+
+Runtime inertness is not the same as zero binary size. To strip it completely from App Store builds, don't link it there:
+
+1. Create a separate build configuration (for example `Release-TestFlight`).
+2. In your target's **Frameworks, Libraries, and Embedded Content**, mark `NetCheckerTraffic` as **Optional**.
+3. Under **Build Phases → Link Binary With Libraries**, use `OTHER_LDFLAGS` per configuration so the library links only in Debug and `Release-TestFlight`.
+4. Wrap every call site in `#if DEBUG || TESTFLIGHT`.
+
+Steps 1–3 are what actually removes the code; step 4 is what makes the app still compile without it.
+
+### Bounding memory when it is enabled
+
+The capture limits are enforced at capture time, not at export:
+
+```swift
+var config = InterceptorConfiguration()
+
+config.maxRecords = 200                       // ring buffer of entries
+config.maxBodySizeToCapture = 512 * 1024      // bodies above this are not stored at all
+config.retentionPeriod = 600                  // drop entries older than 10 minutes
+config.captureResponseBody = false            // headers and timing only
+
+TrafficInterceptor.shared.start(configuration: config)
+```
+
+A body over `maxBodySizeToCapture` is dropped whole rather than truncated — a truncated JSON body looks like valid data and misleads whoever reads it.
+
+### Secrets
+
+Sensitive headers are redacted **when captured**, so tokens never reach the traffic store, the UI, or a HAR export:
+
+```swift
+var config = InterceptorConfiguration()
+config.redactHeaders = ["Authorization", "X-API-Key", "Cookie"]
+config.redactionString = "***REDACTED***"
+```
+
+`redactHeaders` defaults to a set of common sensitive headers, `Authorization` among them.
 
 ### Performance Tips
 

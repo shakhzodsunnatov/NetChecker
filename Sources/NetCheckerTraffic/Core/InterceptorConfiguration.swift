@@ -7,7 +7,12 @@ public struct InterceptorConfiguration: Sendable {
     /// Уровень перехвата
     public var level: InterceptionLevel
 
-    /// Включать в Release build (опасно!)
+    /// Разрешить перехват в Release-сборке.
+    ///
+    /// В Debug перехват работает всегда. В Release — только если этот флаг
+    /// выставлен явно. TestFlight собирается в конфигурации Release, поэтому
+    /// именно этот флаг, а не `#if DEBUG`, отделяет сборку для тестировщиков
+    /// от сборки в App Store.
     public var enableInRelease: Bool
 
     // MARK: - Capture Filters
@@ -35,10 +40,7 @@ public struct InterceptorConfiguration: Sendable {
     /// Максимальное количество записей
     public var maxRecords: Int
 
-    /// Сохранять на диск
-    public var persistToDisk: Bool
-
-    /// Период хранения (nil = бесконечно)
+    /// Период хранения записи (nil = не ограничен)
     public var retentionPeriod: TimeInterval?
 
     /// Захватывать тело ответа
@@ -94,7 +96,6 @@ public struct InterceptorConfiguration: Sendable {
         minBodySizeToCapture: Int = 0,
         maxBodySizeToCapture: Int = 10 * 1024 * 1024, // 10 MB
         maxRecords: Int = 1000,
-        persistToDisk: Bool = false,
         retentionPeriod: TimeInterval? = nil,
         captureResponseBody: Bool = true,
         captureRequestBody: Bool = true,
@@ -117,7 +118,6 @@ public struct InterceptorConfiguration: Sendable {
         self.minBodySizeToCapture = minBodySizeToCapture
         self.maxBodySizeToCapture = maxBodySizeToCapture
         self.maxRecords = maxRecords
-        self.persistToDisk = persistToDisk
         self.retentionPeriod = retentionPeriod
         self.captureResponseBody = captureResponseBody
         self.captureRequestBody = captureRequestBody
@@ -186,6 +186,48 @@ public enum InterceptionLevel: String, Sendable, CaseIterable {
             return "Intercepts all URLSession requests via method swizzling"
         case .manual:
             return "Only intercepts explicitly configured sessions"
+        }
+    }
+}
+
+// MARK: - Применение политики захвата
+
+public extension InterceptorConfiguration {
+    /// Перехват разрешён в текущей конфигурации сборки.
+    ///
+    /// В Debug — всегда. В Release — только при `enableInRelease`.
+    var isAllowedInCurrentBuild: Bool {
+        #if DEBUG
+        return true
+        #else
+        return enableInRelease
+        #endif
+    }
+
+    /// Применить лимиты размера к телу.
+    ///
+    /// Возвращает `nil`, если тело захватывать не нужно. Большие тела
+    /// отбрасываются целиком, а не обрезаются: обрезанный JSON выглядит
+    /// как валидные данные и вводит в заблуждение.
+    func bodyWithinLimits(_ body: Data?) -> Data? {
+        guard let body = body, !body.isEmpty else { return nil }
+        guard body.count >= minBodySizeToCapture else { return nil }
+        guard body.count <= maxBodySizeToCapture else { return nil }
+        return body
+    }
+
+    /// Скрыть значения чувствительных заголовков.
+    ///
+    /// Применяется в момент захвата, а не при экспорте: иначе токены
+    /// оседают в памяти и утекают в HAR и в UI.
+    func redacted(headers: [String: String]) -> [String: String] {
+        guard !redactHeaders.isEmpty else { return headers }
+
+        let sensitive = Set(redactHeaders.map { $0.lowercased() })
+        return headers.reduce(into: [:]) { result, item in
+            result[item.key] = sensitive.contains(item.key.lowercased())
+                ? redactionString
+                : item.value
         }
     }
 }

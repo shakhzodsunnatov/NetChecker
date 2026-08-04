@@ -173,8 +173,16 @@ public final class NetCheckerURLProtocol: URLProtocol {
 
         URLProtocol.setProperty(true, forKey: Self.handledKey, in: mutableRequest)
 
-        // Create and store traffic record
-        let record = TrafficRecord(from: mutableRequest as URLRequest)
+        // Create and store traffic record.
+        // Политика захвата применяется здесь, до попадания записи в хранилище:
+        // иначе секреты и гигантские тела оседают в памяти, а редакция
+        // на экспорте их уже не спасает.
+        var record = TrafficRecord(from: mutableRequest as URLRequest)
+        let captureConfig = Self.configSnapshot
+        record.request.headers = captureConfig.redacted(headers: record.request.headers)
+        record.request.body = captureConfig.captureRequestBody
+            ? captureConfig.bodyWithinLimits(record.request.body)
+            : nil
         recordId = record.id
 
         // Perform main actor operations and then start the request
@@ -380,13 +388,12 @@ extension NetCheckerURLProtocol: URLSessionDataDelegate {
         client?.urlProtocolDidFinishLoading(self)
 
         if let id = recordId, let response = receivedResponse {
-            let body = Self.configSnapshot.captureResponseBody ? receivedData : nil
+            let config = Self.configSnapshot
+            let body = config.captureResponseBody ? config.bodyWithinLimits(receivedData) : nil
             await MainActor.run {
-                TrafficStore.shared.complete(
-                    id: id,
-                    response: ResponseData(from: response, body: body),
-                    timings: nil
-                )
+                var data = ResponseData(from: response, body: body)
+                data.headers = config.redacted(headers: data.headers)
+                TrafficStore.shared.complete(id: id, response: data, timings: nil)
             }
         }
     }
@@ -434,17 +441,15 @@ extension NetCheckerURLProtocol: URLSessionDataDelegate {
             if let id = recordId, let response = receivedResponse {
                 // Use thread-safe config snapshot
                 let config = Self.configSnapshot
-                let body = config.captureResponseBody ? receivedData : nil
+                let body = config.captureResponseBody ? config.bodyWithinLimits(receivedData) : nil
 
                 // Timings are handled via URLSessionTaskDelegate didFinishCollecting metrics
                 let timings: RequestTimings? = nil
 
                 Task { @MainActor in
-                    TrafficStore.shared.complete(
-                        id: id,
-                        response: ResponseData(from: response, body: body),
-                        timings: timings
-                    )
+                    var data = ResponseData(from: response, body: body)
+                    data.headers = config.redacted(headers: data.headers)
+                    TrafficStore.shared.complete(id: id, response: data, timings: timings)
                 }
             }
             client?.urlProtocolDidFinishLoading(self)

@@ -58,6 +58,9 @@ public final class TrafficStore: ObservableObject {
 
     // MARK: - Initialization
 
+    /// Срок жизни записи (nil = не ограничен)
+    public var retentionPeriod: TimeInterval?
+
     public init(maxRecords: Int = 1000) {
         self.maxRecords = maxRecords
     }
@@ -67,6 +70,8 @@ public final class TrafficStore: ObservableObject {
     /// Добавить новую запись
     public func add(_ record: TrafficRecord) {
         guard isRecordingEnabled else { return }
+
+        pruneExpiredRecords()
 
         // Ring buffer - удаляем старые записи
         while records.count >= maxRecords {
@@ -79,6 +84,27 @@ public final class TrafficStore: ObservableObject {
 
         updateCounts()
         onNewRecord?(record)
+    }
+
+    /// Удалить записи, у которых истёк срок хранения.
+    ///
+    /// Вызывается при добавлении: отдельный таймер держал бы приложение
+    /// разбуженным ради работы, которая нужна только когда идёт трафик.
+    func pruneExpiredRecords() {
+        guard let retentionPeriod = retentionPeriod, retentionPeriod > 0 else { return }
+
+        let cutoff = Date().addingTimeInterval(-retentionPeriod)
+        guard records.contains(where: { $0.timestamp < cutoff }) else { return }
+
+        records.removeAll { $0.timestamp < cutoff }
+        reindex()
+    }
+
+    /// Пересобрать индекс после произвольного удаления
+    private func reindex() {
+        recordsById = Dictionary(
+            uniqueKeysWithValues: records.enumerated().map { ($0.element.id, $0.offset) }
+        )
     }
 
     /// Обновить существующую запись
