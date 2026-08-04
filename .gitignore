@@ -9,3 +9,6 @@ DerivedData/
 
 # Локальная конфигурация MCP-инструментов разработчика — содержит пути и IP
 .mcp.json
+
+# Brainstorming companion
+.superpowers/
