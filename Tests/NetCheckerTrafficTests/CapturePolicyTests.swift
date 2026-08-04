@@ -83,11 +83,40 @@ final class CapturePolicyTests: XCTestCase {
         XCTAssertEqual(config.redacted(headers: headers), headers)
     }
 
-    func testDefaultConfigurationRedactsAuthorization() {
+    func testDefaultConfigurationKeepsTokensAtCapture() {
+        // Маскировка при захвате необратима, а настоящий токен нужен,
+        // чтобы поделиться запросом или повторить его. По умолчанию не трогаем.
         let config = InterceptorConfiguration()
         let result = config.redacted(headers: ["Authorization": "Bearer t"])
 
-        XCTAssertNotEqual(result["Authorization"], "Bearer t")
+        XCTAssertEqual(result["Authorization"], "Bearer t")
+    }
+
+    func testCURLExportStillRedactsByDefault() {
+        // Экспорт маскирует независимо от политики захвата
+        let record = TrafficRecord(
+            request: RequestData(
+                url: URL(string: "https://api.example.com/x")!,
+                method: .get,
+                headers: ["Authorization": "Bearer super-secret"]
+            )
+        )
+
+        let curl = CURLFormatter.format(record: record)
+        XCTAssertFalse(curl.contains("super-secret"))
+    }
+
+    func testCURLExportCanKeepTokensWhenAsked() {
+        let record = TrafficRecord(
+            request: RequestData(
+                url: URL(string: "https://api.example.com/x")!,
+                method: .get,
+                headers: ["Authorization": "Bearer super-secret"]
+            )
+        )
+
+        let curl = CURLFormatter.format(record: record, redactSensitive: false)
+        XCTAssertTrue(curl.contains("super-secret"))
     }
 
     // MARK: - Разрешение по конфигурации сборки
@@ -107,6 +136,69 @@ final class CapturePolicyTests: XCTestCase {
         config.enableInRelease = true
         XCTAssertTrue(config.isAllowedInCurrentBuild)
         #endif
+    }
+}
+
+/// Тело из httpBodyStream должно и попадать в запись, и оставаться в запросе.
+/// InputStream одноразовый: прочитав его и не вернув данные обратно,
+/// SDK отправлял на сервер пустое тело.
+final class RequestBodyStreamTests: XCTestCase {
+
+    private func streamedRequest(body: Data) -> URLRequest {
+        var request = URLRequest(url: URL(string: "https://api.example.com/upload")!)
+        request.httpMethod = "POST"
+        request.httpBodyStream = InputStream(data: body)
+        return request
+    }
+
+    func testBodyIsReadFromStream() {
+        let body = Data(#"{"file":"payload"}"#.utf8)
+        let captured = RequestData(from: streamedRequest(body: body))
+
+        XCTAssertEqual(captured.body, body)
+        XCTAssertEqual(captured.bodySize, Int64(body.count))
+    }
+
+    func testCapturedBodyCanBeRestoredIntoTheRequest() {
+        let body = Data(#"{"file":"payload"}"#.utf8)
+        let original = streamedRequest(body: body)
+
+        // То, что делает NetCheckerURLProtocol: читает тело, затем возвращает
+        // его в запрос как httpBody, поскольку поток уже осушён
+        let captured = RequestData(from: original)
+
+        let mutable = (original as NSURLRequest).mutableCopy() as! NSMutableURLRequest
+        if mutable.httpBody == nil, let restored = captured.body {
+            mutable.httpBody = restored
+        }
+
+        XCTAssertEqual(mutable.httpBody, body)
+        // Присваивание httpBody само сбрасывает поток — они взаимоисключающие
+        XCTAssertNil(mutable.httpBodyStream)
+    }
+
+    func testStreamIsDrainedByReading() {
+        // Обоснование фикса: повторное чтение того же потока пустое
+        let body = Data("payload".utf8)
+        let stream = InputStream(data: body)
+        let request = { () -> URLRequest in
+            var r = URLRequest(url: URL(string: "https://api.example.com/x")!)
+            r.httpMethod = "POST"
+            r.httpBodyStream = stream
+            return r
+        }()
+
+        XCTAssertEqual(RequestData(from: request).body, body)
+        XCTAssertNil(RequestData(from: request).body)
+    }
+
+    func testPlainHTTPBodyIsUntouched() {
+        var request = URLRequest(url: URL(string: "https://api.example.com/x")!)
+        request.httpMethod = "POST"
+        let body = Data("plain".utf8)
+        request.httpBody = body
+
+        XCTAssertEqual(RequestData(from: request).body, body)
     }
 }
 

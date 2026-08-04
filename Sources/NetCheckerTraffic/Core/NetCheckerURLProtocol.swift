@@ -173,13 +173,22 @@ public final class NetCheckerURLProtocol: URLProtocol {
 
         URLProtocol.setProperty(true, forKey: Self.handledKey, in: mutableRequest)
 
-        // Create and store traffic record.
-        // Политика захвата применяется здесь, до попадания записи в хранилище:
-        // иначе секреты и гигантские тела оседают в памяти, а редакция
-        // на экспорте их уже не спасает.
         var record = TrafficRecord(from: mutableRequest as URLRequest)
+
+        // Чтение httpBodyStream осушает его: InputStream одноразовый.
+        // Если не вернуть тело обратно в запрос, дальше в сеть уйдёт пустое
+        // тело — так SDK молча ломал multipart-загрузки и любые запросы,
+        // собранные через поток (Alamofire и подобные).
+        // httpBody и httpBodyStream взаимоисключающие: присваивание одного
+        // обнуляет другое. Поэтому достаточно записать httpBody — обнулять
+        // поток отдельно нельзя, это сотрёт только что записанное тело.
+        if mutableRequest.httpBody == nil, let captured = record.request.body {
+            mutableRequest.httpBody = captured
+        }
+
+        // Лимиты размера применяются к сохраняемой копии — уже после того,
+        // как тело возвращено в запрос
         let captureConfig = Self.configSnapshot
-        record.request.headers = captureConfig.redacted(headers: record.request.headers)
         record.request.body = captureConfig.captureRequestBody
             ? captureConfig.bodyWithinLimits(record.request.body)
             : nil

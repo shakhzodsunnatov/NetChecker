@@ -650,7 +650,16 @@ A body over `maxBodySizeToCapture` is dropped whole rather than truncated — a 
 
 ### Secrets
 
-Sensitive headers are redacted **when captured**, so tokens never reach the traffic store, the UI, or a HAR export:
+By default NetChecker keeps header values exactly as sent. That is deliberate: you often need the real token to share a request with a backend engineer or replay it from Edit & Retry, and redaction at capture time is irreversible — once the value is gone, no screen can bring it back.
+
+Export to cURL redacts regardless, so a copied command is safe to paste into a ticket:
+
+```swift
+CURLFormatter.format(record: record)                        // Authorization masked
+CURLFormatter.format(record: record, redactSensitive: false) // real token, when you need it
+```
+
+If entries must never hold secrets at all — a build going to external testers, say — opt into redaction at capture:
 
 ```swift
 var config = InterceptorConfiguration()
@@ -658,7 +667,7 @@ config.redactHeaders = ["Authorization", "X-API-Key", "Cookie"]
 config.redactionString = "***REDACTED***"
 ```
 
-`redactHeaders` defaults to a set of common sensitive headers, `Authorization` among them.
+With that set, the value never reaches the traffic store, the UI or a HAR export — and it is not recoverable afterwards.
 
 ### Performance Tips
 

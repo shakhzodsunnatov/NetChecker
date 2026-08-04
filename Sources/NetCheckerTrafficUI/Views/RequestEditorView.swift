@@ -220,16 +220,14 @@ public struct NetCheckerTrafficUI_RequestEditorView: View {
                 // Body Section
                 if method != .get && method != .head {
                     Section {
-                        TextEditor(text: $bodyText)
-                            .font(.system(.caption, design: .monospaced))
-                            .frame(minHeight: 150)
+                        NetCheckerTrafficUI_BodyEditor(
+                            title: "Body",
+                            text: $bodyText,
+                            sourceBody: originalRecord.request.body,
+                            minHeight: 150
+                        )
 
                         HStack {
-                            Button("Format JSON") {
-                                formatBody()
-                            }
-                            .disabled(bodyText.isEmpty)
-
                             Spacer()
 
                             Button("Clear") {
@@ -339,14 +337,6 @@ public struct NetCheckerTrafficUI_RequestEditorView: View {
         }
     }
 
-    private func formatBody() {
-        if let data = bodyText.data(using: .utf8),
-           let json = try? JSONSerialization.jsonObject(with: data),
-           let prettyData = try? JSONSerialization.data(withJSONObject: json, options: [.prettyPrinted, .sortedKeys]),
-           let prettyString = String(data: prettyData, encoding: .utf8) {
-            bodyText = prettyString
-        }
-    }
 
     private func formatResponseBody(_ body: String, contentType: ContentType) -> String {
         if contentType == .json, let formatted = JSONFormatter.format(body) {

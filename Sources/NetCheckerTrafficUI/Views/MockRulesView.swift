@@ -271,8 +271,10 @@ struct AddMockRuleView: View {
                 switch actionType {
                 case .respond:
                     Stepper("Status Code: \(statusCode)", value: $statusCode, in: 100...599)
-                    TextField("Response Body (JSON)", text: $responseBody, axis: .vertical)
-                        .lineLimit(5...10)
+                    NetCheckerTrafficUI_BodyEditor(
+                        title: "Response Body",
+                        text: $responseBody
+                    )
 
                 case .error:
                     Picker("Error Type", selection: $errorType) {
@@ -296,8 +298,11 @@ struct AddMockRuleView: View {
                     Toggle("Override Request Body", isOn: $useCustomRequestBody)
 
                     if useCustomRequestBody {
-                        TextField("Request Body", text: $requestBody, axis: .vertical)
-                            .lineLimit(3...8)
+                        NetCheckerTrafficUI_BodyEditor(
+                            title: "Request Body",
+                            text: $requestBody,
+                            minHeight: 100
+                        )
                     }
                 } header: {
                     Text("Request")
@@ -475,31 +480,20 @@ struct EditMockRuleView: View {
                         }
                     }
 
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Response Body")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                        TextEditor(text: $responseBody)
-                            .font(.system(.caption, design: .monospaced))
-                            .frame(minHeight: 150)
-                    }
-
-                    Button("Format JSON") {
-                        formatJSON()
-                    }
-                    .disabled(responseBody.isEmpty)
+                    NetCheckerTrafficUI_BodyEditor(
+                        title: "Response Body",
+                        text: $responseBody,
+                        minHeight: 150
+                    )
 
                     Toggle("Override Request Body", isOn: $useCustomRequestBody)
 
                     if useCustomRequestBody {
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text("Request Body")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                            TextEditor(text: $requestBody)
-                                .font(.system(.caption, design: .monospaced))
-                                .frame(minHeight: 100)
-                        }
+                        NetCheckerTrafficUI_BodyEditor(
+                            title: "Request Body",
+                            text: $requestBody,
+                            minHeight: 100
+                        )
                     }
                 }
             }
@@ -560,14 +554,6 @@ struct EditMockRuleView: View {
         }
     }
 
-    private func formatJSON() {
-        if let data = responseBody.data(using: .utf8),
-           let json = try? JSONSerialization.jsonObject(with: data),
-           let prettyData = try? JSONSerialization.data(withJSONObject: json, options: [.prettyPrinted, .sortedKeys]),
-           let prettyString = String(data: prettyData, encoding: .utf8) {
-            responseBody = prettyString
-        }
-    }
 
     private func saveRule() {
         let matching = MockMatching(

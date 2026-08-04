@@ -51,7 +51,14 @@ public struct InterceptorConfiguration: Sendable {
 
     // MARK: - Security / Redaction
 
-    /// Заголовки для редактирования (маскировки)
+    /// Заголовки, значения которых маскируются **при захвате**.
+    ///
+    /// По умолчанию пусто: маскировка на этом этапе необратима, а настоящий
+    /// токен часто нужен, чтобы поделиться запросом или повторить его.
+    /// Экспорт в cURL маскирует секреты независимо от этой настройки.
+    ///
+    /// Заполняйте, если записи трафика не должны содержать секретов вообще —
+    /// например, в сборке для внешних тестировщиков.
     public var redactHeaders: Set<String>
 
     /// JSON поля для редактирования
@@ -121,7 +128,7 @@ public struct InterceptorConfiguration: Sendable {
         self.retentionPeriod = retentionPeriod
         self.captureResponseBody = captureResponseBody
         self.captureRequestBody = captureRequestBody
-        self.redactHeaders = redactHeaders ?? HeaderFormatter.sensitiveHeaders
+        self.redactHeaders = redactHeaders ?? []
         self.redactBodyFields = redactBodyFields ?? JSONFormatter.sensitiveFields
         self.redactQueryParams = redactQueryParams ?? ["api_key", "apikey", "access_token", "secret", "key"]
         self.redactionString = redactionString

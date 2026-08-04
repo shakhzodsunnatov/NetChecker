@@ -283,28 +283,18 @@ struct MockCreatorFromRecordView: View {
                     Toggle("Override Request Body", isOn: $useCustomRequestBody)
 
                     if useCustomRequestBody {
-                        TextEditor(text: $requestBody)
-                            .font(.system(.caption, design: .monospaced))
-                            .frame(minHeight: 100)
-
-                        Button("Format JSON") {
-                            formatRequestJSON()
-                        }
-                        .disabled(requestBody.isEmpty)
+                        NetCheckerTrafficUI_BodyEditor(
+                            title: "Request Body",
+                            text: $requestBody,
+                            sourceBody: record.request.body,
+                            minHeight: 100
+                        )
                     }
                 } header: {
-                    HStack {
-                        Text("Request Body")
-                        Spacer()
-                        if !requestBody.isEmpty {
-                            Text("\(requestBody.count) chars")
-                                .font(.caption2)
-                                .foregroundColor(.secondary)
-                        }
-                    }
+                    Text("Request Body")
                 } footer: {
                     Text(useCustomRequestBody
-                         ? "This body will be sent instead of the original request body"
+                         ? "The captured entry will show this body instead of the original one"
                          : "Original request body will be used")
                 }
             }
@@ -343,16 +333,12 @@ struct MockCreatorFromRecordView: View {
             }
 
             Section {
-                TextEditor(text: $responseBody)
-                    .font(.system(.caption, design: .monospaced))
-                    .frame(minHeight: 200)
-
-                if contentType == "application/json" {
-                    Button("Format JSON") {
-                        formatResponseJSON()
-                    }
-                    .disabled(responseBody.isEmpty)
-                }
+                NetCheckerTrafficUI_BodyEditor(
+                    title: "Response Body",
+                    text: $responseBody,
+                    sourceBody: record.response?.body,
+                    minHeight: 200
+                )
             } header: {
                 Text("Response Body")
             } footer: {
@@ -378,23 +364,7 @@ struct MockCreatorFromRecordView: View {
         }
     }
 
-    private func formatRequestJSON() {
-        if let data = requestBody.data(using: .utf8),
-           let json = try? JSONSerialization.jsonObject(with: data),
-           let prettyData = try? JSONSerialization.data(withJSONObject: json, options: [.prettyPrinted, .sortedKeys]),
-           let prettyString = String(data: prettyData, encoding: .utf8) {
-            requestBody = prettyString
-        }
-    }
 
-    private func formatResponseJSON() {
-        if let data = responseBody.data(using: .utf8),
-           let json = try? JSONSerialization.jsonObject(with: data),
-           let prettyData = try? JSONSerialization.data(withJSONObject: json, options: [.prettyPrinted, .sortedKeys]),
-           let prettyString = String(data: prettyData, encoding: .utf8) {
-            responseBody = prettyString
-        }
-    }
 
     private func createMock() {
         let urlPattern: String
