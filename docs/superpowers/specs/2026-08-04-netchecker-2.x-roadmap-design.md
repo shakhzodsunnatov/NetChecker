@@ -1,8 +1,14 @@
-# NetChecker 2.x — удаление MCP и дорожная карта
+# NetChecker 2.0.0 — удаление MCP и новые возможности
 
 **Дата:** 2026-08-04
 **Статус:** утверждено
-**Охват:** релизы 2.0.0, 2.1.0, 2.2.0, 3.0.0
+**Охват:** один релиз 2.0.0
+
+> **Решение по объёму.** Изначально работа предлагалась разбитой на четыре релиза
+> (2.0.0, 2.1.0, 2.2.0, 3.0.0). Владелец продукта решил выпустить всё одним
+> релизом 2.0.0. Разделы ниже сохраняют исходную последовательность работ —
+> она определяет порядок реализации и зависимости между ветками, — но все
+> перечисленные возможности входят в 2.0.0.
 
 ---
 
@@ -143,7 +149,7 @@ netchecker-mcp.js
 
 ---
 
-## 5. Релиз 2.1.0 — Network Conditions
+## 5. Network Conditions
 
 Симуляция сетевых условий для всего трафика: профили 3G, Edge, DSL, offline; настраиваемые задержка, ограничение полосы и вероятность потери пакетов.
 
@@ -164,7 +170,7 @@ netchecker-mcp.js
 
 ---
 
-## 6. Релиз 2.2.0 — HAR import и replay
+## 6. HAR import и replay
 
 Загрузка HAR-файла и воспроизведение записанной сессии в виде набора моков — работа приложения в офлайне на реальных данных.
 
@@ -180,9 +186,9 @@ netchecker-mcp.js
 
 ---
 
-## 7. Релиз 3.0.0 — WebSocket inspection
+## 7. WebSocket inspection
 
-Наиболее крупная работа, требующая нового слоя перехвата и новой модели данных. Вынесена в отдельный мажор.
+Наиболее крупная часть работы: требует нового слоя перехвата и новой модели данных.
 
 ### Почему нельзя переиспользовать текущий перехватчик
 
@@ -212,23 +218,29 @@ netchecker-mcp.js
 
 ### Что осознанно не входит
 
-Моки и брейкпоинты для WebSocket в 3.0.0 не реализуются. Сначала нужен работающий и проверенный на реальных приложениях перехват; вмешательство в поток кадров — предмет отдельного проектирования.
+Моки и брейкпоинты для WebSocket не реализуются. Сначала нужен работающий и проверенный на реальных приложениях перехват; вмешательство в поток кадров — предмет отдельного проектирования.
 
 ---
 
 ## 8. Порядок работ и ветки
 
-```
-feature/remove-mcp        → development   (squash)   ─┐
-feature/environments-tab  → development   (squash)    ├─ 2.0.0
-feature/docs-cleanup      → development   (squash)    │
-feature/test-coverage     → development   (squash)   ─┘
-                          development → main (merge-коммит) → тег 2.0.0
+Все ветки вливаются squash-мёрджем в `development`, в порядке зависимостей:
 
-feature/network-conditions → development → main → тег 2.1.0
-feature/har-import         → development → main → тег 2.2.0
-feature/websocket          → development → main → тег 3.0.0
 ```
+feature/remove-mcp          → development   (squash)
+feature/environments-tab    → development   (squash)
+feature/docs-cleanup        → development   (squash)
+feature/test-coverage       → development   (squash)
+feature/network-conditions  → development   (squash)
+feature/har-import          → development   (squash)
+feature/websocket           → development   (squash)
+
+                 development → main (merge-коммит) → тег 2.0.0
+```
+
+Порядок существенен: `network-conditions` переводит задержки на неблокирующую
+основу, без чего троттлинг подвесит приложение; `websocket` идёт последним,
+поскольку добавляет отдельный слой перехвата и модель данных.
 
 Ветка `feature/mcp-server` в репозитории SDK и `feature/mcp-server-test` в репозитории демо-приложения удаляются после выхода 2.0.0.
 
