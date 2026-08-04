@@ -168,6 +168,7 @@ Switch between environments instantly:
 | 📋 **Export to cURL** | Copy any request as a cURL command |
 | 📦 **HAR Export** | Export traffic sessions in standard HAR format |
 | 📥 **HAR Import** | Load a HAR from Chrome, Safari or Charles and replay it as mocks |
+| 🔌 **WebSocket** | Inspect the frame stream of a connection, in both directions |
 | 🔐 **SSL Inspection** | View TLS version, cipher suites, and certificate chains |
 | 🎨 **Native SwiftUI** | Beautiful, responsive UI that feels right at home |
 | 💾 **Persistent Rules** | Mock rules and breakpoints survive app restarts |
@@ -497,6 +498,38 @@ if let debugMode = TrafficInterceptor.shared.variable("DEBUG") {
 ```
 
 ---
+### 🔌 WebSocket Inspection
+
+WebSocket connections need one word changed at the call site:
+
+```swift
+// Before
+let task = session.webSocketTask(with: url)
+
+// After — frames now show up in the inspector
+let task = session.netCheckerWebSocketTask(with: url)
+
+task.resume()
+try await task.send(.string("hello"))
+let message = try await task.receive()
+task.cancel(with: .goingAway, reason: nil)
+```
+
+The wrapper mirrors `URLSessionWebSocketTask`, and `task.task` gives you the
+underlying task whenever you need it. Open the **WebSocket** tab inside Traffic
+to watch the frame stream live, filter by direction, and inspect any frame —
+JSON payloads are syntax highlighted.
+
+> **Why not automatic?** Every other capture path in NetChecker builds on
+> `URLProtocol`, which WebSocket tasks bypass entirely. Method swizzling does not
+> work either: at runtime a task is a private `__NSURLSessionWebSocketTask` that
+> overrides `sendMessage:completionHandler:`, `receiveMessageWithCompletionHandler:`
+> and `cancelWithCloseCode:reason:`, so swizzling the public class never fires.
+> Swizzling the private class by name would break on OS updates and put App Store
+> review at risk. The wrapper is the honest trade: one word, and it always works.
+
+---
+
 ### 📊 Programmatic Access
 
 Access traffic data in your code:
@@ -670,7 +703,7 @@ TrafficInterceptor.shared.enableProxyMode(
 - [x] Environment switching
 - [x] Network condition simulation — 3G, Edge, offline, packet loss
 - [x] HAR import and session replay
-- [ ] WebSocket traffic inspection
+- [x] WebSocket traffic inspection
 - [ ] gRPC support
 - [ ] Shared team mock configurations
 - [ ] Charles/Proxyman session import
