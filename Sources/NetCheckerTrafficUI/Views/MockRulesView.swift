@@ -231,6 +231,8 @@ struct AddMockRuleView: View {
     @State private var actionType = ActionType.respond
     @State private var statusCode = 200
     @State private var responseBody = ""
+    @State private var useCustomRequestBody = false
+    @State private var requestBody = ""
     @State private var delaySeconds: Double = 5.0
     @State private var errorType = MockError.noConnection
 
@@ -288,6 +290,21 @@ struct AddMockRuleView: View {
                         .foregroundColor(.secondary)
                 }
             }
+
+            if actionType == .respond {
+                Section {
+                    Toggle("Override Request Body", isOn: $useCustomRequestBody)
+
+                    if useCustomRequestBody {
+                        TextField("Request Body", text: $requestBody, axis: .vertical)
+                            .lineLimit(3...8)
+                    }
+                } header: {
+                    Text("Request")
+                } footer: {
+                    Text("The real request is never sent when a mock matches, so the captured entry would show the original body. Override it to record what the mock stands for instead.")
+                }
+            }
         }
         .navigationTitle("Add Mock Rule")
         .toolbar {
@@ -323,7 +340,8 @@ struct AddMockRuleView: View {
             let response = MockResponse(
                 statusCode: statusCode,
                 headers: ["Content-Type": "application/json"],
-                body: responseBody.data(using: .utf8)
+                body: responseBody.data(using: .utf8),
+                requestBodyOverride: useCustomRequestBody ? requestBody.data(using: .utf8) : nil
             )
             action = .respond(response)
         case .error:
@@ -361,6 +379,8 @@ struct EditMockRuleView: View {
     @State private var selectedMethod: HTTPMethod?
     @State private var statusCode: Int
     @State private var responseBody: String
+    @State private var useCustomRequestBody: Bool
+    @State private var requestBody: String
     @State private var delaySeconds: Double
     @State private var showDeleteConfirmation = false
 
@@ -379,14 +399,21 @@ struct EditMockRuleView: View {
             self._statusCode = State(initialValue: response.statusCode)
             let bodyString = response.body.flatMap { String(data: $0, encoding: .utf8) } ?? ""
             self._responseBody = State(initialValue: bodyString)
+            let override = response.requestBodyOverride.flatMap { String(data: $0, encoding: .utf8) }
+            self._useCustomRequestBody = State(initialValue: override != nil)
+            self._requestBody = State(initialValue: override ?? "")
             self._delaySeconds = State(initialValue: 0)
         case .delay(let seconds):
             self._statusCode = State(initialValue: 200)
             self._responseBody = State(initialValue: "")
+            self._useCustomRequestBody = State(initialValue: false)
+            self._requestBody = State(initialValue: "")
             self._delaySeconds = State(initialValue: seconds)
         default:
             self._statusCode = State(initialValue: 200)
             self._responseBody = State(initialValue: "")
+            self._useCustomRequestBody = State(initialValue: false)
+            self._requestBody = State(initialValue: "")
             self._delaySeconds = State(initialValue: 0)
         }
     }
@@ -461,6 +488,19 @@ struct EditMockRuleView: View {
                         formatJSON()
                     }
                     .disabled(responseBody.isEmpty)
+
+                    Toggle("Override Request Body", isOn: $useCustomRequestBody)
+
+                    if useCustomRequestBody {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Request Body")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                            TextEditor(text: $requestBody)
+                                .font(.system(.caption, design: .monospaced))
+                                .frame(minHeight: 100)
+                        }
+                    }
                 }
             }
 
@@ -547,7 +587,8 @@ struct EditMockRuleView: View {
             let response = MockResponse(
                 statusCode: statusCode,
                 headers: ["Content-Type": "application/json"],
-                body: responseBody.isEmpty ? nil : responseBody.data(using: .utf8)
+                body: responseBody.isEmpty ? nil : responseBody.data(using: .utf8),
+                requestBodyOverride: useCustomRequestBody ? requestBody.data(using: .utf8) : nil
             )
             updatedRule.action = .respond(response)
         case .delay:

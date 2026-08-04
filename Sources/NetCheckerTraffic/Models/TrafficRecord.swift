@@ -59,7 +59,9 @@ public struct TrafficRecord: Codable, Sendable, Identifiable, Hashable {
     // MARK: - Request/Response
 
     /// Данные запроса
-    public let request: RequestData
+    /// `var`, а не `let`: мок с `requestBodyOverride` подменяет тело запроса
+    /// в уже сохранённой записи
+    public var request: RequestData
 
     /// Данные ответа (nil если pending/failed)
     public var response: ResponseData?

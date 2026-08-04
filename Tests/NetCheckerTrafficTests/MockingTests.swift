@@ -214,4 +214,126 @@ final class MockEngineTests: XCTestCase {
 
         XCTAssertNil(engine.matchError(request: URLRequest(url: URL(string: "https://api.example.com/users")!)))
     }
+
+    // MARK: - Задержки
+
+    func testMatchDelayReportsConfiguredDelay() {
+        engine.addRule(MockRule(
+            matching: MockMatching(urlPattern: "/slow"),
+            action: .delay(seconds: 2.5)
+        ))
+
+        let delay = engine.matchDelay(request: URLRequest(url: URL(string: "https://api.example.com/slow")!))
+        XCTAssertEqual(delay, 2.5)
+    }
+
+    func testMatchDelayIgnoresNonDelayRules() {
+        engine.addRule(jsonRule(pattern: "/users", status: 200))
+
+        XCTAssertNil(engine.matchDelay(request: URLRequest(url: URL(string: "https://api.example.com/users")!)))
+    }
+
+    func testMatchDelayIsNilWhenEngineDisabled() {
+        engine.addRule(MockRule(
+            matching: MockMatching(urlPattern: "/slow"),
+            action: .delay(seconds: 2)
+        ))
+        engine.isEnabled = false
+
+        XCTAssertNil(engine.matchDelay(request: URLRequest(url: URL(string: "https://api.example.com/slow")!)))
+    }
+
+    func testMatchDoesNotBlockOnDelayRules() {
+        engine.addRule(MockRule(
+            matching: MockMatching(urlPattern: "/slow"),
+            action: .delay(seconds: 30)
+        ))
+
+        // match() раньше вызывал Thread.sleep и вешал поток загрузки URL
+        let start = Date()
+        _ = engine.match(request: URLRequest(url: URL(string: "https://api.example.com/slow")!))
+
+        XCTAssertLessThan(Date().timeIntervalSince(start), 0.5)
+    }
+
+    // MARK: - Подмена тела запроса
+
+    func testRequestBodyOverrideSurvivesRuleRoundTrip() throws {
+        let override = Data(#"{"intended":true}"#.utf8)
+        let rule = MockRule(
+            matching: MockMatching(urlPattern: "/users"),
+            action: .respond(MockResponse(statusCode: 200, requestBodyOverride: override))
+        )
+
+        // Правила персистятся в UserDefaults, поэтому поле должно кодироваться
+        let encoded = try JSONEncoder().encode(rule)
+        let decoded = try JSONDecoder().decode(MockRule.self, from: encoded)
+
+        guard case .respond(let response) = decoded.action else {
+            return XCTFail("Ожидалось действие .respond")
+        }
+        XCTAssertEqual(response.requestBodyOverride, override)
+    }
+
+    func testRequestBodyOverrideIsNilByDefault() {
+        guard case .respond(let response) = jsonRule(pattern: "/x", status: 200).action else {
+            return XCTFail("Ожидалось действие .respond")
+        }
+        XCTAssertNil(response.requestBodyOverride)
+    }
+}
+
+/// Подмена тела запроса должна доезжать до записи трафика.
+/// Раньше поле записывалось в правило и не читалось ничем.
+@MainActor
+final class MockRequestBodyOverrideTests: XCTestCase {
+
+    override func setUp() async throws {
+        try await super.setUp()
+        TrafficStore.shared.clear()
+    }
+
+    override func tearDown() async throws {
+        TrafficStore.shared.clear()
+        try await super.tearDown()
+    }
+
+    func testOverrideReplacesRecordedRequestBody() {
+        let original = Data(#"{"original":true}"#.utf8)
+        let override = Data(#"{"mocked":true}"#.utf8)
+
+        let record = TrafficRecord(
+            request: RequestData(
+                url: URL(string: "https://api.example.com/users")!,
+                method: .post,
+                body: original
+            )
+        )
+        TrafficStore.shared.add(record)
+
+        // Тот же шаг, что делает NetCheckerURLProtocol при срабатывании мока
+        TrafficStore.shared.update(id: record.id) { stored in
+            stored.request.body = override
+            stored.request.bodySize = Int64(override.count)
+            stored.markAsMocked()
+        }
+
+        let stored = TrafficStore.shared.record(for: record.id)
+        XCTAssertEqual(stored?.request.body, override)
+        XCTAssertEqual(stored?.request.bodySize, Int64(override.count))
+    }
+
+    func testRecordRequestBodyStaysWhenNoOverride() {
+        let original = Data(#"{"original":true}"#.utf8)
+        let record = TrafficRecord(
+            request: RequestData(
+                url: URL(string: "https://api.example.com/users")!,
+                method: .post,
+                body: original
+            )
+        )
+        TrafficStore.shared.add(record)
+
+        XCTAssertEqual(TrafficStore.shared.record(for: record.id)?.request.body, original)
+    }
 }

@@ -72,29 +72,7 @@ public struct ShareButton: View {
     }
 
     private func share() {
-        #if os(iOS)
-        guard let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
-              let window = windowScene.windows.first,
-              let rootVC = window.rootViewController else {
-            return
-        }
-
-        // Найти самый верхний VC (чтобы не упасть если уже есть presented)
-        var topVC = rootVC
-        while let presented = topVC.presentedViewController { topVC = presented }
-
-        let activityVC = UIActivityViewController(
-            activityItems: items,
-            applicationActivities: nil
-        )
-
-        if let popover = activityVC.popoverPresentationController {
-            popover.sourceView = topVC.view
-            popover.sourceRect = CGRect(x: topVC.view.bounds.midX, y: topVC.view.bounds.midY, width: 0, height: 0)
-        }
-
-        topVC.present(activityVC, animated: true)
-        #endif
+        SharePresenter.present(items: items)
     }
 }
 
@@ -104,8 +82,6 @@ public struct ExportMenuButton: View {
     let record: TrafficRecord
 
     @State private var copiedLabel: String?
-    @State private var showShareSheet = false
-    @State private var shareItems: [Any] = []
 
     public init(record: TrafficRecord) {
         self.record = record
@@ -113,11 +89,12 @@ public struct ExportMenuButton: View {
 
     public var body: some View {
         Menu {
-            // Share (система)
+            // Share (система).
+            // Презентуем через UIKit, а не через .sheet на самом Menu:
+            // лист, поднимаемый из действия меню, гонится с закрытием этого меню
+            // и в половине случаев не появлялся вовсе.
             Button {
-                let text = buildFullAPI()
-                shareItems = [text]
-                showShareSheet = true
+                SharePresenter.present(items: [buildFullAPI()])
             } label: {
                 Label("Share Full API", systemImage: "square.and.arrow.up")
             }
@@ -175,12 +152,6 @@ public struct ExportMenuButton: View {
                 Image(systemName: "square.and.arrow.up")
             }
         }
-        #if os(iOS)
-        .sheet(isPresented: $showShareSheet) {
-            ActivityViewControllerRepresentable(items: shareItems, excludedTypes: nil)
-                .presentationDetents([.medium, .large])
-        }
-        #endif
     }
 
     private func copyWithFeedback(_ text: String, label: String) {

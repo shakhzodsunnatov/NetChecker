@@ -18,8 +18,11 @@ public struct NetCheckerTrafficUI_TrafficListView: View {
     public init() {}
 
     public var body: some View {
-        NavigationStack {
-            VStack(spacing: 0) {
+        // Экран намеренно не создаёт собственный NavigationStack — его даёт
+        // вызывающая сторона. Раньше стек был здесь, а инспектор оборачивал экран
+        // во второй: из-за вложенности кнопка Done уходила на внешнюю панель,
+        // перекрытую внутренней, и переставала отображаться.
+        VStack(spacing: 0) {
                 // Search and filter bar
                 NetCheckerTrafficUI_TrafficSearchBar(
                     searchText: $searchText,
@@ -43,13 +46,13 @@ public struct NetCheckerTrafficUI_TrafficListView: View {
                 }
             }
             .navigationTitle("Network Traffic")
+            // Одна группа вместо двух отдельных ToolbarItem с одинаковым
+            // placement: при совпадающем placement порядок не определён,
+            // а на узкой панели часть элементов схлопывается или пропадает.
             .toolbar {
-                ToolbarItem(placement: .primaryAction) {
-                    actionsMenu
-                }
-
-                ToolbarItem(placement: .primaryAction) {
+                ToolbarItemGroup(placement: .primaryAction) {
                     RecordingIndicator(isRecording: interceptor.isRunning)
+                    actionsMenu
                 }
             }
             .sheet(item: $selectedRecord) { record in
@@ -99,7 +102,6 @@ public struct NetCheckerTrafficUI_TrafficListView: View {
                     }
                 }
             }
-        }
     }
 
     private var filteredRecords: [TrafficRecord] {
@@ -261,20 +263,7 @@ public struct NetCheckerTrafficUI_TrafficListView: View {
     }
 
     private func exportSingleRecord(_ record: TrafficRecord) {
-        let curl = CURLFormatter.format(record: record)
-        #if os(iOS)
-        let activityVC = UIActivityViewController(activityItems: [curl], applicationActivities: nil)
-        if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
-           let rootVC = windowScene.windows.first?.rootViewController {
-            var topVC = rootVC
-            while let presented = topVC.presentedViewController { topVC = presented }
-            if let popover = activityVC.popoverPresentationController {
-                popover.sourceView = topVC.view
-                popover.sourceRect = CGRect(x: topVC.view.bounds.midX, y: topVC.view.bounds.midY, width: 0, height: 0)
-            }
-            topVC.present(activityVC, animated: true)
-        }
-        #endif
+        SharePresenter.present(items: [CURLFormatter.format(record: record)])
     }
 }
 

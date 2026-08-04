@@ -57,12 +57,13 @@ public struct NetCheckerTrafficUI_TrafficDetailView: View {
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
         #endif
+        // Одна группа вместо двух ToolbarItem с одинаковым placement:
+        // при совпадающем placement порядок не определён, а на узкой панели
+        // часть элементов схлопывается или пропадает совсем.
         .toolbar {
-            ToolbarItem(placement: .primaryAction) {
+            ToolbarItemGroup(placement: .primaryAction) {
                 ExportMenuButton(record: record)
-            }
 
-            ToolbarItem(placement: .primaryAction) {
                 Menu {
                     Button {
                         showingEditor = true

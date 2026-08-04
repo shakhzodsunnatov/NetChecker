@@ -303,8 +303,18 @@ public final class NetCheckerURLProtocol: URLProtocol {
 
         // Update record
         if let id = recordId {
+            let requestBodyOverride = mockResponse.requestBodyOverride
+
             Task { @MainActor in
                 TrafficStore.shared.update(id: id) { record in
+                    // Правило может подменить тело запроса: настоящий запрос
+                    // никуда не уходит, поэтому в записи показываем то тело,
+                    // которое задал автор мока
+                    if let override = requestBodyOverride {
+                        record.request.body = override
+                        record.request.bodySize = Int64(override.count)
+                    }
+
                     record.complete(
                         with: ResponseData(from: response, body: mockResponse.body, isFromCache: false)
                     )
