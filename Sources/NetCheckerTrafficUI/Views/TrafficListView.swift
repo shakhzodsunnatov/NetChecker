@@ -6,7 +6,6 @@ import Combine
 public struct NetCheckerTrafficUI_TrafficListView: View {
     @ObservedObject private var store = TrafficStore.shared
     @ObservedObject private var interceptor = TrafficInterceptor.shared
-    @State private var selectedRecord: TrafficRecord?
     @State private var filter = TrafficFilter()
     @State private var searchText = ""
     @State private var showingFilters = false
@@ -53,11 +52,6 @@ public struct NetCheckerTrafficUI_TrafficListView: View {
                 ToolbarItemGroup(placement: .primaryAction) {
                     RecordingIndicator(isRecording: interceptor.isRunning)
                     actionsMenu
-                }
-            }
-            .sheet(item: $selectedRecord) { record in
-                NavigationStack {
-                    NetCheckerTrafficUI_TrafficDetailView(record: record)
                 }
             }
             .sheet(isPresented: $showingFilters) {
@@ -148,11 +142,15 @@ public struct NetCheckerTrafficUI_TrafficListView: View {
 
     private var recordsList: some View {
         List {
+            // NavigationLink вместо onTapGesture: жест без contentShape ловился
+            // только по непрозрачным пикселям, то есть по тексту, и пустое место
+            // строки не реагировало. Push-переход к тому же и есть штатный
+            // системный способ раскрыть элемент списка — шеврон, подсветка
+            // при нажатии и кнопка «Назад» появляются сами.
             ForEach(filteredRecords, id: \.compositeId) { record in
-                TrafficRecordRow(record: record)
-                    .onTapGesture {
-                        selectedRecord = record
-                    }
+                NavigationLink(value: record.id) {
+                    TrafficRecordRow(record: record)
+                }
                     .swipeActions(edge: .trailing) {
                         Button(role: .destructive) {
                             store.remove(id: record.id)
@@ -171,6 +169,11 @@ public struct NetCheckerTrafficUI_TrafficListView: View {
             }
         }
         .listStyle(.plain)
+        .navigationDestination(for: UUID.self) { id in
+            if let record = store.record(for: id) {
+                NetCheckerTrafficUI_TrafficDetailView(record: record)
+            }
+        }
     }
 
     private func exportHAR() {
@@ -290,6 +293,21 @@ struct TrafficRecordRow: View {
                     .font(.caption)
                     .foregroundColor(.secondary)
                     .lineLimit(1)
+
+                // Теги потока — сразу видно, к какой фиче относится вызов
+                if !record.metadata.tags.isEmpty {
+                    HStack(spacing: 4) {
+                        ForEach(record.metadata.tags.prefix(3), id: \.self) { tag in
+                            Text(tag)
+                                .font(.caption2)
+                                .padding(.horizontal, 5)
+                                .padding(.vertical, 1)
+                                .background(Color.accentColor.opacity(0.15))
+                                .foregroundStyle(Color.accentColor)
+                                .clipShape(Capsule())
+                        }
+                    }
+                }
             }
 
             Spacer()
@@ -422,10 +440,30 @@ struct StatItem: View {
 struct FilterSheet: View {
     @Binding var filter: TrafficFilter
     @SwiftUI.Environment(\.dismiss) private var dismiss
+    @ObservedObject private var tagger = TrafficTagger.shared
+    @ObservedObject private var store = TrafficStore.shared
+
+    /// Теги из правил и из уже записанного трафика
+    private var availableTags: [String] {
+        let fromTraffic = store.records.flatMap(\.metadata.tags)
+        return Array(Set(tagger.knownTags + fromTraffic)).sorted()
+    }
 
     var body: some View {
         NavigationStack {
             Form {
+                if !availableTags.isEmpty {
+                    Section {
+                        ForEach(availableTags, id: \.self) { tag in
+                            Toggle(tag, isOn: tagBinding(tag))
+                        }
+                    } header: {
+                        Text("Flow Tags")
+                    } footer: {
+                        Text("Tag related endpoints under one flow name in Settings, then filter the list down to just that flow.")
+                    }
+                }
+
                 Section("HTTP Methods") {
                     ForEach(HTTPMethod.allCases, id: \.rawValue) { method in
                         Toggle(method.rawValue, isOn: methodBinding(method))
@@ -460,6 +498,17 @@ struct FilterSheet: View {
                 }
             }
         }
+    }
+
+    private func tagBinding(_ tag: String) -> Binding<Bool> {
+        Binding(
+            get: { filter.tags?.contains(tag) ?? false },
+            set: { isOn in
+                var tags = filter.tags ?? []
+                if isOn { tags.insert(tag) } else { tags.remove(tag) }
+                filter.tags = tags.isEmpty ? nil : tags
+            }
+        )
     }
 
     private func methodBinding(_ method: HTTPMethod) -> Binding<Bool> {

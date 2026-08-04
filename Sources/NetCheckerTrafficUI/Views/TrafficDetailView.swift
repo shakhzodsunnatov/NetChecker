@@ -3,25 +3,47 @@ import NetCheckerTrafficCore
 
 /// Detailed view for a traffic record with tabs
 public struct NetCheckerTrafficUI_TrafficDetailView: View {
-    let record: TrafficRecord
+    /// Запись читается из хранилища по идентификатору, а не хранится значением.
+    ///
+    /// Раньше экран держал снимок `TrafficRecord`. Открытый на ещё летящем
+    /// запросе, он навсегда оставался в состоянии загрузки: ответ приходил
+    /// в хранилище, а копия во вью не менялась — приходилось выйти и зайти.
+    private let recordId: UUID
 
+    /// Значение на случай, если запись уже вытеснена из хранилища
+    private let snapshot: TrafficRecord
+
+    @ObservedObject private var store = TrafficStore.shared
     @State private var selectedTab = 0
     @State private var showingEditor = false
     @State private var showingMockCreator = false
     @State private var showBreakpointAdded = false
     @State private var showMockAdded = false
+    @State private var retryState: InlineRetryState = .idle
     @SwiftUI.Environment(\.dismiss) private var dismiss
     @ObservedObject private var breakpointEngine = BreakpointEngine.shared
     @ObservedObject private var mockEngine = MockEngine.shared
 
+    /// Актуальное состояние записи
+    var record: TrafficRecord {
+        store.record(for: recordId) ?? snapshot
+    }
+
     public init(record: TrafficRecord) {
-        self.record = record
+        self.recordId = record.id
+        self.snapshot = record
     }
 
     public var body: some View {
         VStack(spacing: 0) {
             // Header
             recordHeader
+
+            InlineRetryPanel(
+                state: retryState,
+                onRetry: retryRequest,
+                onDismiss: { withAnimation { retryState = .idle } }
+            )
 
             // Tab picker
             Picker("View", selection: $selectedTab) {
@@ -215,9 +237,26 @@ public struct NetCheckerTrafficUI_TrafficDetailView: View {
         return formatter.string(from: date)
     }
 
+    /// Повторить запрос, не уходя с экрана.
+    ///
+    /// Раньше результат отбрасывался (`_ = await`), новая запись оказывалась
+    /// в общем списке и её приходилось искать вручную.
     private func retryRequest() {
+        guard !retryState.isRunning else { return }
+
+        withAnimation { retryState = .running }
+
         Task {
-            _ = await RequestRetrier.retry(record: record)
+            let result = await RequestRetrier.retry(record: record)
+
+            withAnimation {
+                retryState = .finished(
+                    status: result.response?.statusCode,
+                    duration: result.duration,
+                    size: result.response?.bodySize ?? 0,
+                    error: result.error?.localizedDescription
+                )
+            }
         }
     }
 

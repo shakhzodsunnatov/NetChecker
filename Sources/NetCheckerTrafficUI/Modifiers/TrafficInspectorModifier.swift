@@ -383,6 +383,16 @@ struct SettingsView: View {
                 Text("Applies to all intercepted traffic. Bandwidth limiting buffers the response body and releases it in timed chunks, so it approximates a slow link rather than reproducing it exactly.")
             }
 
+            Section {
+                NavigationLink {
+                    NetCheckerTrafficUI_TagRulesView()
+                } label: {
+                    Label("Flow Tags", systemImage: "tag")
+                }
+            } footer: {
+                Text("Group related endpoints under one flow name, then filter the traffic list down to just that flow.")
+            }
+
             Section("Mock Engine") {
                 Toggle("Enable Mocking", isOn: $mockEngine.isEnabled)
 

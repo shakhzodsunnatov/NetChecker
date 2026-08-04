@@ -72,6 +72,11 @@ public struct TrafficFilter: Codable, Sendable {
     /// Исключить хосты
     public var excludeHosts: Set<String>?
 
+    // MARK: - Tags
+
+    /// Показывать только записи с этими тегами (совпадение по любому из них)
+    public var tags: Set<String>?
+
     // MARK: - Sorting
 
     /// Поле для сортировки
@@ -202,6 +207,13 @@ public struct TrafficFilter: Codable, Sendable {
         if let excludeHosts = excludeHosts, !excludeHosts.isEmpty {
             let lowercasedHosts = Set(excludeHosts.map { $0.lowercased() })
             result = result.filter { !lowercasedHosts.contains($0.host.lowercased()) }
+        }
+
+        // Tags
+        if let tags = tags, !tags.isEmpty {
+            result = result.filter { record in
+                !tags.isDisjoint(with: record.metadata.tags)
+            }
         }
 
         // Sorting

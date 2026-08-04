@@ -372,6 +372,9 @@ struct EnvironmentRowView: View {
                 .buttonStyle(.plain)
             }
             .padding(.vertical, 4)
+            // Без contentShape нажатие ловится только по непрозрачным пикселям,
+            // и пустое место строки — между текстом и галочкой — не реагирует
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
     }

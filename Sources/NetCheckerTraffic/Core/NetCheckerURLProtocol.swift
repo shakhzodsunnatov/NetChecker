@@ -211,6 +211,16 @@ public final class NetCheckerURLProtocol: URLProtocol {
                 URLRewriter.applyHeaders(rewriteResult.headers, to: mutableRequest, overwrite: true)
             }
 
+            // Автоматические теги: помечаем запрос по правилам, чтобы связанные
+            // вызовы одного потока можно было отфильтровать по имени
+            let autoTags = TrafficTagger.shared.tags(
+                for: record.request.url,
+                method: record.request.method
+            )
+            if !autoTags.isEmpty {
+                record.metadata.tags.append(contentsOf: autoTags)
+            }
+
             TrafficStore.shared.add(record)
 
             let conditions = NetworkConditionState.current
