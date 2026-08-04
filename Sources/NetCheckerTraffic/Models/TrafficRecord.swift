@@ -201,8 +201,14 @@ public struct TrafficRecord: Codable, Sendable, Identifiable, Hashable {
 
     /// Composite ID that includes state for SwiftUI diffing
     /// This ensures the row updates when the record state changes
+    /// Идентичность строки в списке.
+    ///
+    /// Намеренно включает изменяемые поля: `ForEach` использует это значение
+    /// как identity, и если оно не меняется, строка не перерисовывается.
+    /// Теги входят сюда по той же причине — без них пометка появлялась
+    /// только после закрытия и повторного открытия инспектора.
     public var compositeId: String {
-        "\(id.uuidString)-\(state.displayName)-\(statusCode ?? 0)"
+        "\(id.uuidString)-\(state.displayName)-\(statusCode ?? 0)-\(metadata.tags.joined(separator: ","))"
     }
 
     /// Краткое описание для списка

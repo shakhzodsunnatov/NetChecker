@@ -188,39 +188,43 @@ public struct NetCheckerTrafficUI_TrafficListView: View {
     }
 
     private var recordsList: some View {
-        // В режиме выбора List управляет отметками сам — это штатный
-        // системный способ пометить несколько строк сразу
-        List(selection: $selectedIds) {
-            // NavigationLink вместо onTapGesture: жест без contentShape ловился
-            // только по непрозрачным пикселям, то есть по тексту, и пустое место
-            // строки не реагировало. Push-переход к тому же и есть штатный
-            // системный способ раскрыть элемент списка — шеврон, подсветка
-            // при нажатии и кнопка «Назад» появляются сами.
+        // Без List(selection:): его биндинг перехватывал нажатия и после
+        // долгого нажатия строка переставала открываться по одиночному тапу.
+        // Режим выбора рисуется явно — заодно работает и на macOS,
+        // где editMode недоступен.
+        List {
             ForEach(filteredRecords, id: \.compositeId) { record in
-                NavigationLink(value: record.id) {
-                    TrafficRecordRow(record: record)
+                Group {
+                    if isSelecting {
+                        selectableRow(record)
+                    } else {
+                        // Push-переход — штатный системный способ раскрыть
+                        // элемент списка: шеврон, подсветка и «Назад» бесплатно
+                        NavigationLink(value: record.id) {
+                            TrafficRecordRow(record: record)
+                        }
+                    }
                 }
-                    .tag(record.id)
-                    .contextMenu {
-                        TagAssignmentMenu(ids: [record.id]) {
-                            pendingTagIds = [record.id]
-                        }
+                .contextMenu {
+                    TagAssignmentMenu(ids: [record.id]) {
+                        pendingTagIds = [record.id]
                     }
-                    .swipeActions(edge: .trailing) {
-                        Button(role: .destructive) {
-                            store.remove(id: record.id)
-                        } label: {
-                            Label("Delete", systemImage: "trash")
-                        }
+                }
+                .swipeActions(edge: .trailing) {
+                    Button(role: .destructive) {
+                        store.remove(id: record.id)
+                    } label: {
+                        Label("Delete", systemImage: "trash")
                     }
-                    .swipeActions(edge: .leading) {
-                        Button {
-                            exportSingleRecord(record)
-                        } label: {
-                            Label("Share", systemImage: "square.and.arrow.up")
-                        }
-                        .tint(.blue)
+                }
+                .swipeActions(edge: .leading) {
+                    Button {
+                        exportSingleRecord(record)
+                    } label: {
+                        Label("Share", systemImage: "square.and.arrow.up")
                     }
+                    .tint(.blue)
+                }
             }
         }
         .listStyle(.plain)
@@ -229,6 +233,29 @@ public struct NetCheckerTrafficUI_TrafficListView: View {
                 NetCheckerTrafficUI_TrafficDetailView(record: record)
             }
         }
+    }
+
+    /// Строка в режиме множественного выбора
+    private func selectableRow(_ record: TrafficRecord) -> some View {
+        Button {
+            if selectedIds.contains(record.id) {
+                selectedIds.remove(record.id)
+            } else {
+                selectedIds.insert(record.id)
+            }
+        } label: {
+            HStack(spacing: 10) {
+                Image(systemName: selectedIds.contains(record.id)
+                      ? "checkmark.circle.fill"
+                      : "circle")
+                    .foregroundStyle(selectedIds.contains(record.id) ? Color.accentColor : .secondary)
+                    .imageScale(.large)
+
+                TrafficRecordRow(record: record)
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
     }
 
     private func exportHAR() {

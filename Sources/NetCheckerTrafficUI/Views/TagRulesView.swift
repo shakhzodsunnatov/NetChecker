@@ -1,218 +1,137 @@
 import SwiftUI
 import NetCheckerTrafficCore
 
-/// Управление правилами пометки трафика.
+/// Теги и помеченные ими запросы.
 ///
-/// Идея: назвать поток — скажем, `NewFeatureFlow` — и перечислить, какие
-/// эндпоинты к нему относятся. Дальше список трафика фильтруется по этому
-/// имени, вместо того чтобы выискивать нужные вызовы глазами.
+/// Экран отвечает на вопрос «что я пометил как NewFeatureFlow», а не
+/// «по какому паттерну помечать будущие запросы»: помечают вручную из списка
+/// трафика, поэтому смотреть здесь нужно результат, а не правила.
 public struct NetCheckerTrafficUI_TagRulesView: View {
+    @ObservedObject private var store = TrafficStore.shared
     @ObservedObject private var tagger = TrafficTagger.shared
-    @State private var isAdding = false
 
     public init() {}
 
+    /// Теги с количеством помеченных запросов
+    private var tags: [(name: String, count: Int)] {
+        var counts: [String: Int] = [:]
+        for record in store.records {
+            for tag in record.metadata.tags {
+                counts[tag, default: 0] += 1
+            }
+        }
+
+        // Имена без записей тоже показываем — тег мог остаться после очистки
+        for name in tagger.knownTags where counts[name] == nil {
+            counts[name] = 0
+        }
+
+        return counts
+            .map { (name: $0.key, count: $0.value) }
+            .sorted { $0.name < $1.name }
+    }
+
     public var body: some View {
         List {
-            if tagger.rules.isEmpty {
-                // ContentUnavailableView появился только в iOS 17,
-                // а пакет поддерживает iOS 16
+            if tags.isEmpty {
                 Section {
-                    VStack(spacing: 8) {
-                        Image(systemName: "tag")
-                            .font(.system(size: 32))
-                            .foregroundStyle(.secondary)
-
-                        Text("Нет правил пометки")
-                            .font(.headline)
-
-                        Text("Назовите поток и перечислите его эндпоинты — список трафика можно будет свести к одной фиче.")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .multilineTextAlignment(.center)
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 24)
+                    emptyState
                 }
             } else {
-                ForEach(groupedRules, id: \.tag) { group in
-                    Section(group.tag) {
-                        ForEach(group.rules) { rule in
-                            TagRuleRow(rule: rule) { updated in
-                                tagger.updateRule(updated)
-                            }
-                        }
-                        .onDelete { offsets in
-                            for index in offsets {
-                                tagger.removeRule(id: group.rules[index].id)
-                            }
-                        }
-                    }
-                }
-            }
-
-            Section {
-                Button {
-                    tagger.reapplyToStoredTraffic()
-                } label: {
-                    Label("Применить к записанному трафику", systemImage: "arrow.clockwise")
-                }
-                .disabled(tagger.rules.isEmpty)
-            } footer: {
-                Text("Новые правила помечают только последующие запросы. Эта кнопка проставит теги и на то, что уже записано.")
-            }
-
-            if !tagger.rules.isEmpty {
                 Section {
-                    Button(role: .destructive) {
-                        tagger.clearRules()
-                    } label: {
-                        Label("Удалить все правила", systemImage: "trash")
+                    ForEach(tags, id: \.name) { tag in
+                        NavigationLink {
+                            TaggedRequestsView(tag: tag.name)
+                        } label: {
+                            HStack {
+                                Label(tag.name, systemImage: "tag.fill")
+                                Spacer()
+                                Text("\(tag.count)")
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
                     }
+                    .onDelete(perform: deleteTags)
+                } header: {
+                    Text("Теги")
+                } footer: {
+                    Text("Пометить запросы можно долгим нажатием в списке трафика или через «Пометить несколько».")
                 }
             }
         }
         .navigationTitle("Flow Tags")
-        .toolbar {
-            ToolbarItem(placement: .primaryAction) {
-                Button {
-                    isAdding = true
-                } label: {
-                    Image(systemName: "plus")
-                }
-            }
-        }
-        .sheet(isPresented: $isAdding) {
-            NavigationStack {
-                AddTagRuleView { rule in
-                    tagger.addRule(rule)
-                }
-            }
-        }
-    }
-
-    private var groupedRules: [(tag: String, rules: [TrafficTagRule])] {
-        Dictionary(grouping: tagger.rules, by: \.tag)
-            .map { (tag: $0.key, rules: $0.value) }
-            .sorted { $0.tag < $1.tag }
-    }
-}
-
-// MARK: - Строка правила
-
-private struct TagRuleRow: View {
-    let rule: TrafficTagRule
-    let onToggle: (TrafficTagRule) -> Void
-
-    var body: some View {
-        HStack {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(rule.urlPattern)
-                    .font(.system(.subheadline, design: .monospaced))
-                    .lineLimit(1)
-
-                if let method = rule.method {
-                    Text(method.rawValue)
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                }
-            }
-
-            Spacer()
-
-            Toggle("", isOn: Binding(
-                get: { rule.isEnabled },
-                set: { isOn in
-                    var updated = rule
-                    updated.isEnabled = isOn
-                    onToggle(updated)
-                }
-            ))
-            .labelsHidden()
-        }
-        .contentShape(Rectangle())
-    }
-}
-
-// MARK: - Добавление правила
-
-private struct AddTagRuleView: View {
-    let onSave: (TrafficTagRule) -> Void
-
-    @SwiftUI.Environment(\.dismiss) private var dismiss
-    @ObservedObject private var tagger = TrafficTagger.shared
-
-    @State private var tag = ""
-    @State private var urlPattern = ""
-    @State private var method: HTTPMethod?
-
-    private var isValid: Bool {
-        !tag.trimmingCharacters(in: .whitespaces).isEmpty && !urlPattern.isEmpty
-    }
-
-    var body: some View {
-        Form {
-            Section {
-                TextField("NewFeatureFlow", text: $tag)
-                    #if os(iOS)
-                    .textInputAutocapitalization(.never)
-                    #endif
-                    .autocorrectionDisabled()
-            } header: {
-                Text("Имя потока")
-            } footer: {
-                Text("Все совпавшие запросы получат этот тег и будут фильтроваться вместе.")
-            }
-
-            if !tagger.knownTags.isEmpty {
-                Section("Существующие потоки") {
-                    ForEach(tagger.knownTags, id: \.self) { known in
-                        Button(known) { tag = known }
-                            .contentShape(Rectangle())
-                    }
-                }
-            }
-
-            Section {
-                TextField("*/api/checkout/*", text: $urlPattern)
-                    #if os(iOS)
-                    .textInputAutocapitalization(.never)
-                    #endif
-                    .autocorrectionDisabled()
-
-                Picker("Метод", selection: $method) {
-                    Text("Любой").tag(HTTPMethod?.none)
-                    ForEach(HTTPMethod.allCases, id: \.rawValue) { item in
-                        Text(item.rawValue).tag(HTTPMethod?.some(item))
-                    }
-                }
-            } header: {
-                Text("Совпадение")
-            } footer: {
-                Text("Подстрока URL или шаблон с «*».")
-            }
-        }
-        .navigationTitle("Новый тег")
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
         #endif
-        .toolbar {
-            ToolbarItem(placement: .cancellationAction) {
-                Button("Отмена") { dismiss() }
-            }
-            ToolbarItem(placement: .confirmationAction) {
-                Button("Добавить") {
-                    onSave(
-                        TrafficTagRule(
-                            tag: tag.trimmingCharacters(in: .whitespaces),
-                            urlPattern: urlPattern,
-                            method: method
-                        )
-                    )
-                    dismiss()
+    }
+
+    private var emptyState: some View {
+        VStack(spacing: 8) {
+            Image(systemName: "tag")
+                .font(.system(size: 32))
+                .foregroundStyle(.secondary)
+
+            Text("Пока ничего не помечено")
+                .font(.headline)
+
+            Text("В списке трафика задержите палец на запросе, чтобы навесить тег, или выберите «Пометить несколько» для группы.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 24)
+    }
+
+    /// Удалить тег: снять его со всех записей и забыть имя
+    private func deleteTags(at offsets: IndexSet) {
+        for index in offsets {
+            let name = tags[index].name
+            store.removeTag(name, from: store.records.map(\.id))
+            tagger.forgetTag(name)
+        }
+    }
+}
+
+// MARK: - Запросы одного тега
+
+/// Список запросов, помеченных конкретным тегом
+struct TaggedRequestsView: View {
+    let tag: String
+
+    @ObservedObject private var store = TrafficStore.shared
+
+    private var records: [TrafficRecord] {
+        store.records.filter { $0.metadata.tags.contains(tag) }
+    }
+
+    var body: some View {
+        List {
+            ForEach(records, id: \.compositeId) { record in
+                NavigationLink {
+                    NetCheckerTrafficUI_TrafficDetailView(record: record)
+                } label: {
+                    TrafficRecordRow(record: record)
                 }
-                .disabled(!isValid)
+                .swipeActions(edge: .trailing) {
+                    Button(role: .destructive) {
+                        store.removeTag(tag, from: [record.id])
+                    } label: {
+                        Label("Снять тег", systemImage: "tag.slash")
+                    }
+                }
             }
         }
+        .listStyle(.plain)
+        .overlay {
+            if records.isEmpty {
+                Text("Нет запросов с этим тегом")
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .navigationTitle(tag)
+        #if os(iOS)
+        .navigationBarTitleDisplayMode(.inline)
+        #endif
     }
 }

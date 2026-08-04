@@ -178,7 +178,14 @@ final class InspectorFeatureSettingsTests: XCTestCase {
         try await super.tearDown()
     }
 
-    func testAllFeaturesVisibleByDefault() {
+    func testEnvironmentsIsHiddenByDefault() {
+        // Раздел нужен не в каждой сессии, а мест в панели вкладок мало
+        XCTAssertEqual(InspectorFeatureSettings.defaultHidden, [.environments])
+        XCTAssertFalse(InspectorFeature.environments.isRequired)
+    }
+
+    func testShowAllMakesEveryFeatureVisible() {
+        settings.showAll()
         XCTAssertEqual(settings.visible.count, InspectorFeature.allCases.count)
     }
 

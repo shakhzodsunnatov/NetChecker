@@ -51,8 +51,14 @@ public enum InspectorFeature: String, CaseIterable, Codable, Sendable, Identifia
 public final class InspectorFeatureSettings: ObservableObject {
     public static let shared = InspectorFeatureSettings()
 
+    /// Разделы, скрытые до первой настройки пользователем.
+    ///
+    /// Environments скрыт по умолчанию: он нужен не в каждой сессии отладки,
+    /// а место в панели вкладок ограничено. Включается в «Разделах инспектора».
+    public static let defaultHidden: Set<InspectorFeature> = [.environments]
+
     /// Скрытые разделы
-    @Published public private(set) var hidden: Set<InspectorFeature> = [] {
+    @Published public private(set) var hidden: Set<InspectorFeature> = defaultHidden {
         didSet { persist() }
     }
 
@@ -95,6 +101,8 @@ public final class InspectorFeatureSettings: ObservableObject {
     }
 
     private func load() {
+        // Отсутствие записи означает «пользователь ещё не настраивал» —
+        // тогда действует набор по умолчанию, а не «показать всё»
         guard let data = UserDefaults.standard.data(forKey: storageKey),
               let stored = try? JSONDecoder().decode([InspectorFeature].self, from: data) else {
             return
