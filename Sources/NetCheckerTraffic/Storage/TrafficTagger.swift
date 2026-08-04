@@ -69,10 +69,34 @@ public final class TrafficTagger: ObservableObject {
         didSet { persist() }
     }
 
+    /// Теги, созданные вручную при пометке запросов.
+    ///
+    /// Хранятся отдельно от записей: иначе тег исчезал бы вместе с очисткой
+    /// трафика, и его пришлось бы вводить заново.
+    @Published public private(set) var customTags: [String] = [] {
+        didSet { persistCustomTags() }
+    }
+
     private let storageKey = "NetCheckerTagRules"
+    private let customTagsKey = "NetCheckerCustomTags"
 
     private init() {
         load()
+    }
+
+    // MARK: - Ручные теги
+
+    /// Запомнить имя тега, чтобы предлагать его при следующей пометке
+    public func registerTag(_ tag: String) {
+        let trimmed = tag.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty, !customTags.contains(trimmed) else { return }
+        customTags.append(trimmed)
+        customTags.sort()
+    }
+
+    /// Забыть имя тега
+    public func forgetTag(_ tag: String) {
+        customTags.removeAll { $0 == tag }
     }
 
     // MARK: - Правила
@@ -99,9 +123,9 @@ public final class TrafficTagger: ObservableObject {
         rules.removeAll()
     }
 
-    /// Все теги, встречающиеся в правилах
+    /// Все известные теги — из правил, из ручных пометок и из записанного трафика
     public var knownTags: [String] {
-        Array(Set(rules.map(\.tag))).sorted()
+        Array(Set(rules.map(\.tag) + customTags + TrafficStore.shared.usedTags)).sorted()
     }
 
     // MARK: - Применение
@@ -140,7 +164,15 @@ public final class TrafficTagger: ObservableObject {
         UserDefaults.standard.set(data, forKey: storageKey)
     }
 
+    private func persistCustomTags() {
+        UserDefaults.standard.set(customTags, forKey: customTagsKey)
+    }
+
     private func load() {
+        if let stored = UserDefaults.standard.stringArray(forKey: customTagsKey) {
+            customTags = stored
+        }
+
         guard let data = UserDefaults.standard.data(forKey: storageKey),
               let stored = try? JSONDecoder().decode([TrafficTagRule].self, from: data) else {
             return

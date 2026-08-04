@@ -13,6 +13,31 @@ public struct NetCheckerTrafficUI_TrafficListView: View {
     @State private var showCopiedToast = false
     @State private var showingImporter = false
     @State private var importOutcome: HARImportOutcome?
+    @State private var selectedIds = Set<UUID>()
+    @State private var pendingTagIds: Set<UUID>?
+    // Собственный флаг вместо \.editMode: это окружение недоступно на macOS,
+    // которую пакет поддерживает
+    @State private var isSelecting = false
+
+    /// Фильтр по тегам живёт в самом фильтре — так он учитывается
+    /// вместе с остальными условиями
+    private var tagSelectionBinding: Binding<Set<String>> {
+        Binding(
+            get: { filter.tags ?? [] },
+            set: { filter.tags = $0.isEmpty ? nil : $0 }
+        )
+    }
+
+    /// Сколько записей помечено каждым тегом
+    private var tagCounts: [String: Int] {
+        var counts: [String: Int] = [:]
+        for record in store.records {
+            for tag in record.metadata.tags {
+                counts[tag, default: 0] += 1
+            }
+        }
+        return counts
+    }
 
     public init() {}
 
@@ -28,6 +53,17 @@ public struct NetCheckerTrafficUI_TrafficListView: View {
                     filter: $filter,
                     showingFilters: $showingFilters
                 )
+
+                // Фильтр по тегу в один тап, прямо над списком
+                TagFilterBar(
+                    selected: tagSelectionBinding,
+                    tags: store.usedTags,
+                    counts: tagCounts
+                )
+
+                if isSelecting {
+                    selectionBar
+                }
 
                 // Statistics banner
                 if !filteredRecords.isEmpty {
@@ -56,6 +92,17 @@ public struct NetCheckerTrafficUI_TrafficListView: View {
             }
             .sheet(isPresented: $showingFilters) {
                 FilterSheet(filter: $filter)
+            }
+            .sheet(item: Binding(
+                get: { pendingTagIds.map(TagTarget.init) },
+                set: { if $0 == nil { pendingTagIds = nil } }
+            )) { target in
+                NewTagSheet(ids: target.ids) {
+                    withAnimation {
+                        isSelecting = false
+                        selectedIds.removeAll()
+                    }
+                }
             }
             .fileImporter(
                 isPresented: $showingImporter,
@@ -141,7 +188,9 @@ public struct NetCheckerTrafficUI_TrafficListView: View {
     }
 
     private var recordsList: some View {
-        List {
+        // В режиме выбора List управляет отметками сам — это штатный
+        // системный способ пометить несколько строк сразу
+        List(selection: $selectedIds) {
             // NavigationLink вместо onTapGesture: жест без contentShape ловился
             // только по непрозрачным пикселям, то есть по тексту, и пустое место
             // строки не реагировало. Push-переход к тому же и есть штатный
@@ -151,6 +200,12 @@ public struct NetCheckerTrafficUI_TrafficListView: View {
                 NavigationLink(value: record.id) {
                     TrafficRecordRow(record: record)
                 }
+                    .tag(record.id)
+                    .contextMenu {
+                        TagAssignmentMenu(ids: [record.id]) {
+                            pendingTagIds = [record.id]
+                        }
+                    }
                     .swipeActions(edge: .trailing) {
                         Button(role: .destructive) {
                             store.remove(id: record.id)
@@ -184,6 +239,38 @@ public struct NetCheckerTrafficUI_TrafficListView: View {
             #endif
             showCopiedToast = true
         }
+    }
+
+    /// Панель массовой пометки — видна только в режиме выбора
+    private var selectionBar: some View {
+        HStack(spacing: 12) {
+            Text(selectedIds.isEmpty ? "Выберите запросы" : "Выбрано: \(selectedIds.count)")
+                .font(.caption)
+                .foregroundStyle(selectedIds.isEmpty ? .secondary : .primary)
+
+            Spacer()
+
+            Menu {
+                TagAssignmentMenu(ids: selectedIds) {
+                    pendingTagIds = selectedIds
+                }
+            } label: {
+                Label("Пометить", systemImage: "tag")
+                    .font(.caption.weight(.medium))
+            }
+            .disabled(selectedIds.isEmpty)
+
+            Button("Готово") {
+                withAnimation {
+                    isSelecting = false
+                    selectedIds.removeAll()
+                }
+            }
+            .font(.caption.weight(.medium))
+        }
+        .padding(.horizontal)
+        .padding(.vertical, 8)
+        .background(.thinMaterial)
     }
 
     /// Меню действий в тулбаре.
@@ -228,6 +315,14 @@ public struct NetCheckerTrafficUI_TrafficListView: View {
                 showingImporter = true
             } label: {
                 Label("Import HAR", systemImage: "square.and.arrow.down")
+            }
+
+            Divider()
+
+            Button {
+                withAnimation { isSelecting = true }
+            } label: {
+                Label("Пометить несколько", systemImage: "checklist")
             }
         } label: {
             Image(systemName: "ellipsis.circle")

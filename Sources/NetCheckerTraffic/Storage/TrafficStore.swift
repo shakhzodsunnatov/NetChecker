@@ -188,6 +188,41 @@ public final class TrafficStore: ObservableObject {
     }
 
     /// Удалить запись по ID
+    // MARK: - Теги
+
+    /// Пометить записи тегом
+    public func addTag(_ tag: String, to ids: some Collection<UUID>) {
+        let trimmed = tag.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty else { return }
+
+        for id in ids {
+            update(id: id) { record in
+                guard !record.metadata.tags.contains(trimmed) else { return }
+                record.metadata.tags.append(trimmed)
+            }
+        }
+    }
+
+    /// Снять тег с записей
+    public func removeTag(_ tag: String, from ids: some Collection<UUID>) {
+        for id in ids {
+            update(id: id) { record in
+                record.metadata.tags.removeAll { $0 == tag }
+            }
+        }
+    }
+
+    /// Есть ли тег у всех перечисленных записей
+    public func allRecords(_ ids: some Collection<UUID>, haveTag tag: String) -> Bool {
+        guard !ids.isEmpty else { return false }
+        return ids.allSatisfy { record(for: $0)?.metadata.tags.contains(tag) ?? false }
+    }
+
+    /// Все теги, встречающиеся в записях
+    public var usedTags: [String] {
+        Array(Set(records.flatMap(\.metadata.tags))).sorted()
+    }
+
     public func remove(id: UUID) {
         guard let index = recordsById[id], index < records.count else { return }
         records.remove(at: index)

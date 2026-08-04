@@ -153,6 +153,139 @@ final class TrafficTaggerTests: XCTestCase {
     }
 }
 
+/// Ручная пометка: выделить запросы в списке и навесить тег
+@MainActor
+final class ManualTaggingTests: XCTestCase {
+
+    private var store: TrafficStore { TrafficStore.shared }
+    private var tagger: TrafficTagger { TrafficTagger.shared }
+
+    override func setUp() async throws {
+        try await super.setUp()
+        store.clear()
+        tagger.clearRules()
+        for tag in tagger.customTags { tagger.forgetTag(tag) }
+    }
+
+    override func tearDown() async throws {
+        store.clear()
+        tagger.clearRules()
+        for tag in tagger.customTags { tagger.forgetTag(tag) }
+        try await super.tearDown()
+    }
+
+    @discardableResult
+    private func addRecord(_ path: String) -> TrafficRecord {
+        let record = TrafficRecord(
+            request: RequestData(url: URL(string: "https://api.example.com\(path)")!, method: .get)
+        )
+        store.add(record)
+        return record
+    }
+
+    func testTagSeveralRecordsAtOnce() {
+        let first = addRecord("/a")
+        let second = addRecord("/b")
+        addRecord("/c")
+
+        store.addTag("NewFeatureFlow", to: [first.id, second.id])
+
+        XCTAssertEqual(store.record(for: first.id)?.metadata.tags, ["NewFeatureFlow"])
+        XCTAssertEqual(store.record(for: second.id)?.metadata.tags, ["NewFeatureFlow"])
+        XCTAssertEqual(store.usedTags, ["NewFeatureFlow"])
+    }
+
+    func testTaggingTwiceDoesNotDuplicate() {
+        let record = addRecord("/a")
+
+        store.addTag("Flow", to: [record.id])
+        store.addTag("Flow", to: [record.id])
+
+        XCTAssertEqual(store.record(for: record.id)?.metadata.tags.count, 1)
+    }
+
+    func testRemoveTag() {
+        let record = addRecord("/a")
+        store.addTag("Flow", to: [record.id])
+        store.removeTag("Flow", from: [record.id])
+
+        XCTAssertTrue(store.record(for: record.id)?.metadata.tags.isEmpty ?? false)
+    }
+
+    func testAllRecordsHaveTagReportsPartialSelection() {
+        let first = addRecord("/a")
+        let second = addRecord("/b")
+
+        store.addTag("Flow", to: [first.id])
+
+        XCTAssertTrue(store.allRecords([first.id], haveTag: "Flow"))
+        XCTAssertFalse(store.allRecords([first.id, second.id], haveTag: "Flow"))
+    }
+
+    func testEmptySelectionIsNotConsideredTagged() {
+        XCTAssertFalse(store.allRecords([], haveTag: "Flow"))
+    }
+
+    func testBlankTagIsIgnored() {
+        let record = addRecord("/a")
+        store.addTag("   ", to: [record.id])
+
+        XCTAssertTrue(store.record(for: record.id)?.metadata.tags.isEmpty ?? false)
+    }
+
+    func testTagIsTrimmed() {
+        let record = addRecord("/a")
+        store.addTag("  Flow  ", to: [record.id])
+
+        XCTAssertEqual(store.record(for: record.id)?.metadata.tags, ["Flow"])
+    }
+
+    func testUsedTagsAreDeduplicatedAndSorted() {
+        let first = addRecord("/a")
+        let second = addRecord("/b")
+
+        store.addTag("Beta", to: [first.id])
+        store.addTag("Alpha", to: [first.id, second.id])
+
+        XCTAssertEqual(store.usedTags, ["Alpha", "Beta"])
+    }
+
+    // MARK: - Реестр имён
+
+    func testRegisteredTagSurvivesClearingTraffic() {
+        let record = addRecord("/a")
+        tagger.registerTag("NewFeatureFlow")
+        store.addTag("NewFeatureFlow", to: [record.id])
+
+        store.clear()
+
+        // Имя должно остаться доступным для следующей пометки
+        XCTAssertTrue(tagger.knownTags.contains("NewFeatureFlow"))
+    }
+
+    func testKnownTagsCombineRulesManualAndTraffic() {
+        tagger.tag("FromRule", matching: "/x/")
+        tagger.registerTag("Manual")
+
+        let record = addRecord("/a")
+        store.addTag("FromTraffic", to: [record.id])
+
+        XCTAssertEqual(tagger.knownTags, ["FromRule", "FromTraffic", "Manual"])
+    }
+
+    func testRegisteringSameTagTwiceKeepsOneEntry() {
+        tagger.registerTag("Flow")
+        tagger.registerTag("Flow")
+
+        XCTAssertEqual(tagger.customTags, ["Flow"])
+    }
+
+    func testBlankTagIsNotRegistered() {
+        tagger.registerTag("   ")
+        XCTAssertTrue(tagger.customTags.isEmpty)
+    }
+}
+
 final class TrafficFilterTagTests: XCTestCase {
 
     private func record(url: String, tags: [String]) -> TrafficRecord {
