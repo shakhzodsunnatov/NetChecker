@@ -175,10 +175,13 @@ public final class EnvironmentStore: ObservableObject {
 
         quickOverrides[normalizedSource] = override
 
-        // Setup auto-disable timer
-        if let timeout = autoDisableAfter {
-            cancelOverrideTimer(for: normalizedSource)
+        // Setup auto-disable timer.
+        // Неположительный таймаут означает, что override уже истёк — таймер не нужен,
+        // rewrite отбросит его при первом обращении. Планировать сон нельзя:
+        // UInt64(отрицательное) — это краш.
+        cancelOverrideTimer(for: normalizedSource)
 
+        if let timeout = autoDisableAfter, timeout > 0 {
             let task = Task {
                 try? await Task.sleep(nanoseconds: UInt64(timeout * 1_000_000_000))
                 await MainActor.run {
