@@ -31,19 +31,30 @@
 
 ---
 
-## 🆕 What's New in 1.3.0 — AI Remote Control
+## 🆕 What's New in 2.0.0
 
-NetChecker now has a built-in **MCP server** that lets AI coding tools (Claude Code, Cursor) control your app directly:
+- **Environment switching is live.** The Environments tab is enabled — switch between Dev, Staging and Production at runtime, override hosts temporarily, and manage per-environment variables. No rebuild required.
+- **The MCP server is gone.** The AI remote-control feature introduced in 1.3.0 has been removed. NetChecker is a traffic debugger, not a remote-control surface for an embedded HTTP server. See [Migrating from 1.3.0](#-migrating-from-130).
+- **Fixed tab selection.** Two tabs shared the same tag, which broke programmatic tab switching.
 
-- **Execute API calls through device** — AI sends requests using your app's real auth tokens, cookies, and certificates. No credential sharing needed.
-- **Custom triggers** — Register any app action (navigate screens, run tests, toggle mocks) and let AI invoke it remotely.
-- **Traffic inspection** — AI can list all HTTP requests, filter errors, and get full request/response details.
-- **Mock control** — AI can add/remove mock rules and test error handling flows automatically.
-- **Device overlay** — AI can show messages, alerts, and test results directly on the device screen.
-- **Flow tracking** — Group related operations, validate expectations, generate test code from recorded flows.
-- **Zero-dependency bridge** — Pure Node.js MCP bridge, auto-discovers device via Wi-Fi.
+---
 
-> **[Full MCP documentation →](#-mcp-server--ai-remote-control)**
+## ⚠️ Migrating from 1.3.0
+
+2.0.0 removes the entire MCP surface. If you used it, delete these calls:
+
+| Removed | Replacement |
+|---|---|
+| `TrafficInterceptor.shared.startMCP()` / `.stopMCP()` | none |
+| `TrafficInterceptor.shared.mcpServer` | none |
+| `MCPServer`, `MCPActionRegistry`, `MCPFlowTracker`, `MCPTestGenerator` | none |
+| `InterceptorConfiguration.mcp` | none |
+| `.netChecker(enableMCP:mcpPort:)` | `.netChecker()` |
+| `TrafficMetadata.mcpSource` | none |
+| `TrafficFilter.onlyMCP` / `.mcpOperationTypes` | none |
+| `netchecker-mcp.js` bridge | none |
+
+Everything else is source-compatible with 1.3.0. If you need the MCP code, it remains available at tag [`1.3.0`](https://github.com/shakhzodsunnatov/NetChecker/tree/1.3.0).
 
 ---
 
@@ -138,7 +149,7 @@ Pause, inspect, and modify requests in real-time:
 - Change URL endpoints
 - Auto-resume with timeout
 
-### 🌍 Environment Switching <sup><kbd>Coming Soon</kbd></sup>
+### 🌍 Environment Switching
 Switch between environments instantly:
 - Dev / Staging / Production
 - Quick URL overrides
@@ -160,9 +171,6 @@ Switch between environments instantly:
 | 🎨 **Native SwiftUI** | Beautiful, responsive UI that feels right at home |
 | 💾 **Persistent Rules** | Mock rules and breakpoints survive app restarts |
 | 🚀 **Zero Dependencies** | Pure Swift — no third-party libraries required |
-| 🤖 **MCP Server** | AI tools can control your app, test APIs, and inspect traffic remotely |
-| 🎯 **Custom Triggers** | Register any app action as an AI-invokable trigger |
-| 📡 **Execute Through Device** | AI sends HTTP requests using the device's real auth session |
 
 ---
 
@@ -177,13 +185,13 @@ Add NetChecker to your project using Xcode:
    ```
    https://github.com/shakhzodsunnatov/NetChecker.git
    ```
-3. Select **Up to Next Major Version** with `1.2.0`
+3. Select **Up to Next Major Version** with `2.0.0`
 
 Or add it to your `Package.swift`:
 
 ```swift
 dependencies: [
-    .package(url: "https://github.com/shakhzodsunnatov/NetChecker.git", from: "1.2.0")
+    .package(url: "https://github.com/shakhzodsunnatov/NetChecker.git", from: "2.0.0")
 ]
 ```
 
@@ -429,9 +437,7 @@ ForEach(breakpointEngine.pausedRequests) { paused in
 
 ---
 
-### 🌍 Environment Management <sup><kbd>Coming Soon</kbd></sup>
-
-> **Note:** Environment switching UI is under development. The API is ready and functional, but the UI tab is temporarily disabled.
+### 🌍 Environment Management
 
 Switch between environments without rebuilding:
 
@@ -489,160 +495,6 @@ if let debugMode = TrafficInterceptor.shared.variable("DEBUG") {
 ```
 
 ---
-
----
-
-## 🤖 MCP Server — AI Remote Control
-
-NetChecker includes a built-in **MCP (Model Context Protocol)** server that lets AI coding tools (Claude Code, Cursor, etc.) **directly control your app**: send API requests through the device, trigger actions, inspect traffic, and run test suites — all without touching the screen.
-
-### How It Works
-
-```
-AI Tool (Claude Code, Cursor)
-  ↓ MCP JSON-RPC over stdio
-Node.js Bridge (netchecker-mcp.js)
-  ↓ HTTP over Wi-Fi
-NetChecker MCP Server (on device, port 9876)
-  ↓
-Your App (real auth tokens, cookies, certificates)
-```
-
-### Setup
-
-**1. Start the MCP server in your app:**
-
-```swift
-// Start manually from code
-MCPServer.shared.start()
-
-// Or use the AI Control tab in the demo app
-```
-
-**2. Add to your `.mcp.json`** (Claude Code / Cursor config):
-
-```json
-{
-  "mcpServers": {
-    "netchecker": {
-      "command": "node",
-      "args": ["/path/to/netchecker-mcp.js"],
-      "env": {
-        "NETCHECKER_URL": "http://<DEVICE_IP>:9876"
-      }
-    }
-  }
-}
-```
-
-The device IP is shown in Xcode console when the MCP server starts and in the AI Control tab.
-
-**3. That's it.** AI can now control your app.
-
-### MCP Tools
-
-| Tool | Description |
-|------|-------------|
-| `netchecker_status` | Check if MCP server is running |
-| `netchecker_log` | Send structured log entry (track API calls, file ops, code changes) |
-| `netchecker_flow_start` | Start a named flow to group related operations |
-| `netchecker_flow_end` | End a flow — triggers test generation |
-| `netchecker_list` | Get recorded HTTP requests (filter: `all`, `mcp`, `errors`) |
-| `netchecker_get_record` | Get full details of a single request (headers, body) |
-| `netchecker_clear` | Clear all recorded traffic |
-| `netchecker_execute` | **Execute HTTP request through the iOS device** (with real auth) |
-| `netchecker_triggers` | List available app triggers |
-| `netchecker_trigger` | Invoke a registered trigger (navigate, show UI, run tests) |
-
-### Execute API Through Device
-
-AI can send HTTP requests through your iOS app's network stack — with real authentication tokens, cookies, and certificates. No need to share credentials with AI.
-
-```
-# AI runs this:
-netchecker_execute(url: "https://api.yourapp.com/me", method: "GET")
-
-# The iOS device makes the request with its real session
-# AI gets back: statusCode, headers, body, duration
-```
-
-### Custom Triggers
-
-Register any app action as a trigger that AI can invoke remotely:
-
-```swift
-let registry = MCPActionRegistry.shared
-
-// Navigate to a screen
-registry.register(
-    tag: "open_profile",
-    name: "Open Profile",
-    description: "Navigate to user profile",
-    parameters: ["userId"]
-) { params in
-    let id = params["userId"] ?? "me"
-    await AppRouter.shared.push(.profile(id))
-    return "Opened profile: \(id)"
-}
-
-// Trigger a login flow
-registry.register(
-    tag: "login",
-    name: "Login Test User",
-    description: "Authenticate with test credentials"
-) {
-    try await AuthManager.shared.login(email: "test@app.com", password: "test123")
-    return "Logged in, token: \(AuthManager.shared.token ?? "nil")"
-}
-
-// Add a mock and test error handling
-registry.register(
-    tag: "mock_auth_expired",
-    name: "Simulate Token Expiry",
-    description: "Return 401 for all API calls"
-) {
-    MockEngine.shared.addRule(.serverError(for: "*/api/*", statusCode: 401))
-    MockEngine.shared.isEnabled = true
-    return "401 mock active"
-}
-
-// Show AI message on device screen
-registry.register(
-    tag: "show_message",
-    name: "Show Message",
-    description: "Display overlay banner from AI",
-    parameters: ["title", "body", "style"]
-) { params in
-    await MainActor.run {
-        overlay.show(title: params["title"] ?? "", body: params["body"] ?? "", style: params["style"] ?? "info")
-    }
-    return "Message shown"
-}
-```
-
-### AI Testing Workflow Example
-
-Tell your AI assistant:
-
-> "Use netchecker to: add a 500 error mock, fetch /posts/1, check the traffic for errors, clear the mock, and fetch again. Show before/after comparison."
-
-The AI will:
-1. `netchecker_trigger(tag: "add_mock_error")` — enable 500 mock
-2. `netchecker_trigger(tag: "fetch_post", params: {id: "1"})` — request through device
-3. `netchecker_list(filter: "errors")` — inspect traffic
-4. `netchecker_trigger(tag: "clear_mocks")` — remove mock
-5. `netchecker_trigger(tag: "fetch_post", params: {id: "1"})` — re-test
-6. Report results with comparison
-
-### Node.js Bridge
-
-The bridge (`netchecker-mcp.js`) is zero-dependency — pure Node.js built-ins. It auto-discovers the device:
-- Tries `localhost:9876` first (iOS Simulator)
-- Falls back to `NETCHECKER_URL` env var (real device over Wi-Fi)
-- Auto-retries on connection failure
-
----
-
 ### 📊 Programmatic Access
 
 Access traffic data in your code:
@@ -707,7 +559,7 @@ if let harData = HARFormatter.format(records: records) {
 | `TrafficStatisticsView` | Visual statistics dashboard |
 | `WaterfallChartView` | Performance timing visualization |
 | `SSLDashboardView` | SSL/TLS security overview |
-| `EnvironmentSwitcherView` | Environment management UI *(Coming Soon)* |
+| `EnvironmentSwitcherView` | Environment management UI |
 | `MockRulesView` | Manage mock rules |
 | `BreakpointRulesView` | Manage breakpoints |
 
@@ -813,22 +665,19 @@ TrafficInterceptor.shared.enableProxyMode(
 
 ## 🗺️ Roadmap
 
-- [x] MCP Server for AI tool integration
-- [x] Execute API requests through device (real auth)
-- [x] Custom triggers for remote app control
-- [x] AI-driven test automation
-- [ ] WebSocket traffic inspection
+- [x] Environment switching (2.0.0)
+- [ ] Network condition simulation — 3G, Edge, offline, packet loss (2.1.0)
+- [ ] HAR import and session replay (2.2.0)
+- [ ] WebSocket traffic inspection (3.0.0)
 - [ ] gRPC support
-- [ ] Traffic replay from HAR files
 - [ ] Shared team mock configurations
 - [ ] Charles/Proxyman session import
-- [ ] Network condition simulation (3G, Edge, etc.)
 
 ---
 
 ## 🤝 Contributing
 
-Contributions are welcome! Please read our [Contributing Guide](CONTRIBUTING.md) before submitting a Pull Request.
+Contributions are welcome!
 
 1. Fork the repository
 2. Create your feature branch (`git checkout -b feature/amazing-feature`)
