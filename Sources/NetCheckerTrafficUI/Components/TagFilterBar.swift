@@ -154,6 +154,9 @@ struct NewTagSheet: View {
                         .textInputAutocapitalization(.never)
                         #endif
                         .autocorrectionDisabled()
+                        // Устойчивая цель для UI-тестов: без идентификатора
+                        // запрос по индексу цеплял строку поиска под листом
+                        .accessibilityIdentifier("netchecker.tagName")
                 } header: {
                     Text("Имя тега")
                 } footer: {
