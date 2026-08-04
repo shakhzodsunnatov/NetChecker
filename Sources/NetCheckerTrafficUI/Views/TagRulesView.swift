@@ -12,16 +12,27 @@ public struct NetCheckerTrafficUI_TagRulesView: View {
 
     public init() {}
 
-    /// Теги с количеством помеченных запросов
+    @ObservedObject private var archive = TaggedRequestArchive.shared
+
+    /// Теги с количеством помеченных запросов.
+    ///
+    /// Считаем по архиву: он переживает перезапуск, а живой трафик — нет.
+    /// Идентификаторы совпадают, поэтому одна запись не считается дважды.
     private var tags: [(name: String, count: Int)] {
-        var counts: [String: Int] = [:]
+        var byTag: [String: Set<UUID>] = [:]
+
         for record in store.records {
             for tag in record.metadata.tags {
-                counts[tag, default: 0] += 1
+                byTag[tag, default: []].insert(record.id)
+            }
+        }
+        for archived in archive.requests {
+            for tag in archived.tags {
+                byTag[tag, default: []].insert(archived.id)
             }
         }
 
-        // Имена без записей тоже показываем — тег мог остаться после очистки
+        var counts = byTag.mapValues(\.count)
         for name in tagger.knownTags where counts[name] == nil {
             counts[name] = 0
         }
@@ -83,11 +94,12 @@ public struct NetCheckerTrafficUI_TagRulesView: View {
         .padding(.vertical, 24)
     }
 
-    /// Удалить тег: снять его со всех записей и забыть имя
+    /// Удалить тег: снять его с живых записей, из архива и забыть имя
     private func deleteTags(at offsets: IndexSet) {
         for index in offsets {
             let name = tags[index].name
             store.removeTag(name, from: store.records.map(\.id))
+            archive.removeTag(name)
             tagger.forgetTag(name)
         }
     }
@@ -100,31 +112,64 @@ struct TaggedRequestsView: View {
     let tag: String
 
     @ObservedObject private var store = TrafficStore.shared
+    @ObservedObject private var archive = TaggedRequestArchive.shared
 
-    private var records: [TrafficRecord] {
+    /// Записи текущей сессии
+    private var liveRecords: [TrafficRecord] {
         store.records.filter { $0.metadata.tags.contains(tag) }
+    }
+
+    /// Сохранённые с прошлых запусков — те, которых нет среди живых
+    private var archivedOnly: [ArchivedRequest] {
+        let liveIds = Set(liveRecords.map(\.id))
+        return archive.requests(withTag: tag).filter { !liveIds.contains($0.id) }
     }
 
     var body: some View {
         List {
-            ForEach(records, id: \.compositeId) { record in
-                NavigationLink {
-                    NetCheckerTrafficUI_TrafficDetailView(record: record)
-                } label: {
-                    TrafficRecordRow(record: record)
-                }
-                .swipeActions(edge: .trailing) {
-                    Button(role: .destructive) {
-                        store.removeTag(tag, from: [record.id])
-                    } label: {
-                        Label("Снять тег", systemImage: "tag.slash")
+            if !liveRecords.isEmpty {
+                Section {
+                    ForEach(liveRecords, id: \.compositeId) { record in
+                        NavigationLink {
+                            NetCheckerTrafficUI_TrafficDetailView(record: record)
+                        } label: {
+                            TrafficRecordRow(record: record)
+                        }
+                        .swipeActions(edge: .trailing) {
+                            Button(role: .destructive) {
+                                store.removeTag(tag, from: [record.id])
+                            } label: {
+                                Label("Снять тег", systemImage: "tag.slash")
+                            }
+                        }
                     }
+                } header: {
+                    Text("Текущая сессия")
+                }
+            }
+
+            if !archivedOnly.isEmpty {
+                Section {
+                    ForEach(archivedOnly) { archived in
+                        ArchivedRequestRow(request: archived)
+                            .swipeActions(edge: .trailing) {
+                                Button(role: .destructive) {
+                                    archive.remove(id: archived.id)
+                                } label: {
+                                    Label("Убрать", systemImage: "trash")
+                                }
+                            }
+                    }
+                } header: {
+                    Text("Сохранённые ранее")
+                } footer: {
+                    Text("Помеченные запросы переживают перезапуск. Тело ответа не сохраняется — запрос остаётся целиком, его можно повторить.")
                 }
             }
         }
-        .listStyle(.plain)
+        // .insetGrouped недоступен на macOS, которую пакет поддерживает
         .overlay {
-            if records.isEmpty {
+            if liveRecords.isEmpty && archivedOnly.isEmpty {
                 Text("Нет запросов с этим тегом")
                     .foregroundStyle(.secondary)
             }
@@ -133,5 +178,34 @@ struct TaggedRequestsView: View {
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
         #endif
+    }
+}
+
+/// Строка сохранённого запроса — данных меньше, чем у живой записи
+struct ArchivedRequestRow: View {
+    let request: ArchivedRequest
+
+    var body: some View {
+        HStack(spacing: 10) {
+            NetCheckerTrafficUI_MethodBadge(method: request.method)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(request.path)
+                    .font(.subheadline.weight(.medium))
+                    .lineLimit(1)
+
+                Text(request.host)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+
+            Spacer()
+
+            if let status = request.statusCode {
+                NetCheckerTrafficUI_StatusCodeBadge(statusCode: status)
+            }
+        }
+        .padding(.vertical, 2)
     }
 }

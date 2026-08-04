@@ -200,6 +200,12 @@ public final class TrafficStore: ObservableObject {
                 guard !record.metadata.tags.contains(trimmed) else { return }
                 record.metadata.tags.append(trimmed)
             }
+
+            // Помеченное переживает перезапуск: обычный трафик живёт
+            // только в памяти, и без этого экран тега оказывался пустым
+            if let record = record(for: id) {
+                TaggedRequestArchive.shared.store(record)
+            }
         }
     }
 
@@ -208,6 +214,10 @@ public final class TrafficStore: ObservableObject {
         for id in ids {
             update(id: id) { record in
                 record.metadata.tags.removeAll { $0 == tag }
+            }
+
+            if let record = record(for: id) {
+                TaggedRequestArchive.shared.store(record)
             }
         }
     }
