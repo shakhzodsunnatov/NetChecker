@@ -6,3 +6,6 @@ DerivedData/
 .swiftpm/configuration/registries.json
 .swiftpm/xcode/package.xcworkspace/contents.xcworkspacedata
 .netrc
+
+# Локальная конфигурация MCP-инструментов разработчика — содержит пути и IP
+.mcp.json

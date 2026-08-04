@@ -245,9 +245,6 @@ public struct TrafficMetadata: Codable, Sendable, Hashable {
     /// Пользовательские теги
     public var tags: [String]
 
-    /// MCP-источник (nil для обычного трафика)
-    public var mcpSource: MCPSourceInfo?
-
     public init(
         host: String,
         path: String,
@@ -256,8 +253,7 @@ public struct TrafficMetadata: Codable, Sendable, Hashable {
         queryItems: [QueryItem] = [],
         isThirdParty: Bool = false,
         sdkSource: String? = nil,
-        tags: [String] = [],
-        mcpSource: MCPSourceInfo? = nil
+        tags: [String] = []
     ) {
         self.host = host
         self.path = path
@@ -267,7 +263,6 @@ public struct TrafficMetadata: Codable, Sendable, Hashable {
         self.isThirdParty = isThirdParty
         self.sdkSource = sdkSource
         self.tags = tags
-        self.mcpSource = mcpSource
     }
 
     public init(from url: URL) {
@@ -280,7 +275,6 @@ public struct TrafficMetadata: Codable, Sendable, Hashable {
         self.isThirdParty = false
         self.sdkSource = nil
         self.tags = []
-        self.mcpSource = nil
     }
 }
 
