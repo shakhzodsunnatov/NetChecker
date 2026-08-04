@@ -14,26 +14,32 @@ public struct NetCheckerTrafficUI_TrafficListView: View {
     @State private var showCopiedToast = false
     @State private var showingImporter = false
     @State private var importOutcome: HARImportOutcome?
-    @State private var transport: TransportScope = .http
-    @ObservedObject private var webSocketStore = WebSocketStore.shared
-
-    /// Какой транспорт показан во вкладке
-    enum TransportScope: Hashable {
-        case http
-        case webSocket
-    }
 
     public init() {}
 
     public var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
-                transportPicker
+                // Search and filter bar
+                NetCheckerTrafficUI_TrafficSearchBar(
+                    searchText: $searchText,
+                    filter: $filter,
+                    showingFilters: $showingFilters
+                )
 
-                if transport == .http {
-                    httpContent
+                // Statistics banner
+                if !filteredRecords.isEmpty {
+                    StatisticsBanner(records: filteredRecords)
+                        .onTapGesture {
+                            showingStatistics = true
+                        }
+                }
+
+                // Records list
+                if filteredRecords.isEmpty {
+                    emptyState
                 } else {
-                    NetCheckerTrafficUI_WebSocketListView()
+                    recordsList
                 }
             }
             .navigationTitle("Network Traffic")
@@ -172,49 +178,6 @@ public struct NetCheckerTrafficUI_TrafficListView: View {
             UIPasteboard.general.string = har
             #endif
             showCopiedToast = true
-        }
-    }
-
-    /// Подпись вкладки WebSocket со счётчиком соединений
-    private var webSocketTabTitle: String {
-        let count = webSocketStore.count
-        return count > 0 ? "WebSocket (\(count))" : "WebSocket"
-    }
-
-    /// Переключатель транспорта: HTTP-записи и WebSocket-соединения хранятся
-    /// в разных хранилищах и описываются разными моделями, поэтому показываются
-    /// раздельно, а не смешиваются в одном списке
-    private var transportPicker: some View {
-        Picker("Транспорт", selection: $transport) {
-            Text("HTTP").tag(TransportScope.http)
-            Text(webSocketTabTitle).tag(TransportScope.webSocket)
-        }
-        .pickerStyle(.segmented)
-        .padding(.horizontal)
-        .padding(.vertical, 8)
-    }
-
-    /// Содержимое вкладки для HTTP-трафика
-    private var httpContent: some View {
-        VStack(spacing: 0) {
-            NetCheckerTrafficUI_TrafficSearchBar(
-                searchText: $searchText,
-                filter: $filter,
-                showingFilters: $showingFilters
-            )
-
-            if !filteredRecords.isEmpty {
-                StatisticsBanner(records: filteredRecords)
-                    .onTapGesture {
-                        showingStatistics = true
-                    }
-            }
-
-            if filteredRecords.isEmpty {
-                emptyState
-            } else {
-                recordsList
-            }
         }
     }
 
