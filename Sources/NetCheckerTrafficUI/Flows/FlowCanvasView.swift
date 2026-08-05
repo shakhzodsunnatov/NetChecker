@@ -72,6 +72,7 @@ public struct NetCheckerTrafficUI_FlowCanvasView: View {
                     step: current.step(id: step.id) ?? step,
                     outcome: runner.outcomes[step.id],
                     flowId: current.id,
+                    previousResponses: runner.outcomes.compactMapValues(\.response),
                     onRetry: { Task { await runner.retry(from: step.id, in: current) } },
                     onSkip: { Task { await runner.skip(step.id, in: current) } }
                 )
@@ -119,8 +120,10 @@ public struct NetCheckerTrafficUI_FlowCanvasView: View {
             VStack(spacing: 0) {
                 ForEach(Array(levels.enumerated()), id: \.offset) { index, level in
                     if index > 0 {
-                        FlowEdgeView(labels: valueLabels(into: level), state: edgeState(for: level))
+                        FlowLevelConnector(connections: connections(toLevel: index))
                     }
+
+                    FlowLevelCaption(index: index + 1, isParallel: level.count > 1)
                     levelRow(level, startingIndex: startIndex(of: index))
                 }
             }
@@ -218,18 +221,53 @@ public struct NetCheckerTrafficUI_FlowCanvasView: View {
         return step.inputs.map(\.name)
     }
 
-    private func valueLabels(into level: [FlowStep]) -> [String] {
-        Array(Set(level.flatMap { $0.inputs.map(\.name) })).sorted()
+    /// Связи между уровнем `index - 1` и уровнем `index`.
+    ///
+    /// Провод строится для каждой пары «шаг → его зависимость», поэтому
+    /// при нескольких узлах в уровне видно, что именно во что впадает.
+    private func connections(toLevel index: Int) -> [FlowConnection] {
+        let upper = levels[index - 1]
+        let lower = levels[index]
+        guard !upper.isEmpty, !lower.isEmpty else { return [] }
+
+        var result: [FlowConnection] = []
+
+        for (toIndex, target) in lower.enumerated() {
+            let toFraction = fraction(of: toIndex, in: lower.count)
+            let parents = target.dependsOn.compactMap { id in
+                upper.firstIndex { $0.id == id }
+            }
+
+            // Шаг без родителя на предыдущем уровне: рисуем короткий заход,
+            // иначе узел выглядел бы оторванным от графа
+            let sources = parents.isEmpty ? [toIndex.clamped(to: 0..<upper.count)] : parents
+
+            for fromIndex in sources {
+                result.append(
+                    FlowConnection(
+                        id: "\(upper[fromIndex].id)-\(target.id)",
+                        fromFraction: fraction(of: fromIndex, in: upper.count),
+                        toFraction: toFraction,
+                        state: connectionState(from: upper[fromIndex], to: target),
+                        labels: parents.isEmpty ? [] : target.inputs.map(\.name)
+                    )
+                )
+            }
+        }
+
+        return result
     }
 
-    private func edgeState(for level: [FlowStep]) -> FlowEdgeState {
-        let states = level.compactMap { runner.outcomes[$0.id]?.state }
+    /// Центр узла в уровне как доля ширины
+    private func fraction(of index: Int, in count: Int) -> CGFloat {
+        guard count > 1 else { return 0.5 }
+        return (CGFloat(index) + 0.5) / CGFloat(count)
+    }
 
-        if states.contains(where: { if case .failed = $0 { return true } else { return false } }) {
-            return .failed
-        }
-        if states.contains(.notRun) { return .notRun }
-        if states.contains(.succeeded) { return .active }
+    private func connectionState(from source: FlowStep, to target: FlowStep) -> FlowEdgeState {
+        if case .failed = runner.outcomes[source.id]?.state { return .failed }
+        if runner.outcomes[target.id]?.state == .notRun { return .notRun }
+        if runner.outcomes[source.id]?.state == .succeeded { return .active }
         return .idle
     }
 

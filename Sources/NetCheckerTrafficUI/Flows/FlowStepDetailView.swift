@@ -11,18 +11,23 @@ public struct NetCheckerTrafficUI_FlowStepDetailView: View {
     /// Идентификатор сценария нужен редактору: он правит шаг в хранилище
     let flowId: UUID?
 
+    /// Ответы остальных шагов последнего прогона
+    let previousResponses: [UUID: ResponseData]
+
     @SwiftUI.Environment(\.dismiss) private var dismiss
 
     public init(
         step: FlowStep,
         outcome: FlowStepOutcome?,
         flowId: UUID? = nil,
+        previousResponses: [UUID: ResponseData] = [:],
         onRetry: @escaping () -> Void,
         onSkip: @escaping () -> Void
     ) {
         self.step = step
         self.outcome = outcome
         self.flowId = flowId
+        self.previousResponses = previousResponses
         self.onRetry = onRetry
         self.onSkip = onSkip
     }
@@ -53,7 +58,12 @@ public struct NetCheckerTrafficUI_FlowStepDetailView: View {
             if let flowId = flowId {
                 Section {
                     NavigationLink {
-                        FlowStepEditorView(flowId: flowId, stepId: step.id)
+                        FlowStepEditorView(
+                            flowId: flowId,
+                            stepId: step.id,
+                            response: outcome?.response,
+                            previousResponses: previousResponses
+                        )
                     } label: {
                         Label("Настроить шаг", systemImage: "slider.horizontal.3")
                     }
@@ -68,6 +78,20 @@ public struct NetCheckerTrafficUI_FlowStepDetailView: View {
                 if !outcome.substitutions.isEmpty {
                     substitutionsSection(outcome)
                 }
+
+                // Тело запроса в том виде, в каком оно ушло — уже с подстановками
+                if let body = outcome.sentRequest?.body ?? step.request.body,
+                   let text = String(data: body, encoding: .utf8) {
+                    bodySection(title: "Отправленное тело", text: text)
+                }
+
+                if let body = outcome.response?.body,
+                   let text = String(data: body, encoding: .utf8) {
+                    bodySection(title: "Тело ответа", text: text)
+                }
+            } else if let body = step.request.body,
+                      let text = String(data: body, encoding: .utf8) {
+                bodySection(title: "Тело запроса", text: text)
             }
 
             if hasFailed {
@@ -120,6 +144,24 @@ public struct NetCheckerTrafficUI_FlowStepDetailView: View {
         } footer: {
             Text("Чаще всего ломается именно подстановка, а не сам запрос.")
         }
+    }
+
+    private func bodySection(title: String, text: String) -> some View {
+        Section(title) {
+            if isJSON(text) {
+                NetCheckerTrafficUI_JSONSyntaxView(json: text, maxLines: 24)
+            } else {
+                Text(text)
+                    .font(.system(.caption, design: .monospaced))
+                    .textSelection(.enabled)
+            }
+        }
+    }
+
+    private func isJSON(_ text: String) -> Bool {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed.hasPrefix("{") || trimmed.hasPrefix("[") else { return false }
+        return (try? JSONSerialization.jsonObject(with: Data(trimmed.utf8))) != nil
     }
 
     private var recoverySection: some View {

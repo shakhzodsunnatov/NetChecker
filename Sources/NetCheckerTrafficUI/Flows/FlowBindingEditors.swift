@@ -79,6 +79,10 @@ struct FlowInputEditor: View {
     /// Имена, объявленные предыдущими шагами. Выбор из списка вместо
     /// свободного ввода: опечатка в имени привела бы к падению шага в рантайме
     let availableNames: [String]
+
+    /// Запрос шага — из его тела выбираются поля, куда подставлять
+    let request: RequestData?
+
     let onSave: (FlowInput) -> Void
 
     @SwiftUI.Environment(\.dismiss) private var dismiss
@@ -93,6 +97,11 @@ struct FlowInputEditor: View {
     @State private var name: String = ""
     @State private var kind: Kind = .header
     @State private var target = ""
+    @State private var isPickingBodyField = false
+
+    private var bodyKeys: [String] {
+        FlowJSONFields.topLevelKeys(in: request?.body)
+    }
 
     private var isValid: Bool {
         !name.isEmpty && !target.trimmingCharacters(in: .whitespaces).isEmpty
@@ -115,10 +124,27 @@ struct FlowInputEditor: View {
 
                 TextField(placeholder, text: $target)
                     .plainInput()
+
+                // Имя поля тела берётся из самого запроса: вводить его руками
+                // значит рисковать опечаткой, которую видно только в прогоне
+                if kind == .body, !bodyKeys.isEmpty {
+                    Button {
+                        isPickingBodyField = true
+                    } label: {
+                        Label("Выбрать поле тела", systemImage: "hand.tap")
+                    }
+                }
             } header: {
                 Text("Назначение")
             } footer: {
                 Text(footer)
+            }
+        }
+        .sheet(isPresented: $isPickingBodyField) {
+            NavigationStack {
+                FlowRequestFieldPicker(request: request) { key in
+                    target = key
+                }
             }
         }
         .navigationTitle("Подставить значение")

@@ -217,6 +217,7 @@ public final class FlowRunner: ObservableObject {
         switch prepared {
         case .success(let value):
             request = value
+            outcome.sentRequest = value
         case .failure(let error):
             outcome.state = .failed(error.message)
             return (step.id, outcome, nil)
@@ -241,6 +242,9 @@ public final class FlowRunner: ObservableObject {
         }
 
         outcome.statusCode = response.statusCode
+        // Ответ сохраняется и при несовпадении статуса: по нему всё равно
+        // выбираются значения для следующих шагов
+        outcome.response = response
 
         if let expected = step.expectedStatusCode, expected != response.statusCode {
             outcome.state = .failed(

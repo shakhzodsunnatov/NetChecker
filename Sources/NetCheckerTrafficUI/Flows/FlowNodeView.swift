@@ -33,11 +33,19 @@ struct FlowNodeView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(.background)
         .clipShape(RoundedRectangle(cornerRadius: 13))
+        // Пунктир у того, что не выполнялось: сплошная рамка одинаковой
+        // толщины делала «ожидает» и «пропущен» неотличимыми от остальных
         .overlay(
             RoundedRectangle(cornerRadius: 13)
-                .stroke(borderColor, lineWidth: isRunning ? 2 : 1)
+                .strokeBorder(
+                    borderColor,
+                    style: StrokeStyle(
+                        lineWidth: isRunning ? 2 : 1,
+                        dash: isUnexecuted ? [5, 4] : []
+                    )
+                )
         )
-        .opacity(isDimmed ? 0.5 : 1)
+        .opacity(isDimmed ? 0.62 : 1)
         // scale, а не изменение размеров: соседние узлы не съезжают
         .scaleEffect(isRunning ? 1.03 : 1)
         .animation(.spring(response: 0.3, dampingFraction: 0.72), value: isRunning)
@@ -123,6 +131,11 @@ struct FlowNodeView: View {
     private var isRunning: Bool { state == .running }
 
     private var isDimmed: Bool {
+        state == .pending || state == .notRun || state == .skipped
+    }
+
+    /// Шаг не выполнялся — рамка пунктиром
+    private var isUnexecuted: Bool {
         state == .pending || state == .notRun || state == .skipped
     }
 

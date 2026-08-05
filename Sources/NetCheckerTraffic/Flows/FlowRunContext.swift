@@ -44,18 +44,30 @@ public struct FlowStepOutcome: Identifiable, Sendable, Hashable {
     /// а не сам запрос
     public var substitutions: [String: String]
 
+    /// Запрос в том виде, в каком он ушёл, — уже с подстановками.
+    /// Без него непонятно, что именно отправилось.
+    public var sentRequest: RequestData?
+
+    /// Ответ целиком. Нужен не для показа: по нему выбираются значения
+    /// для следующих шагов — вместо ручного ввода JSON-пути
+    public var response: ResponseData?
+
     public init(
         stepId: UUID,
         state: FlowStepState = .pending,
         statusCode: Int? = nil,
         duration: TimeInterval = 0,
-        substitutions: [String: String] = [:]
+        substitutions: [String: String] = [:],
+        sentRequest: RequestData? = nil,
+        response: ResponseData? = nil
     ) {
         self.stepId = stepId
         self.state = state
         self.statusCode = statusCode
         self.duration = duration
         self.substitutions = substitutions
+        self.sentRequest = sentRequest
+        self.response = response
     }
 }
 

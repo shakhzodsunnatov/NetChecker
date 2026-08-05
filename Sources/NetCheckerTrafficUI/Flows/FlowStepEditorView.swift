@@ -9,9 +9,16 @@ struct FlowStepEditorView: View {
     let flowId: UUID
     let stepId: UUID
 
+    /// Ответ этого шага с последнего прогона — по нему выбираются значения
+    let response: ResponseData?
+
+    /// Ответы предыдущих шагов: из них выбирается, что подставлять
+    let previousResponses: [UUID: ResponseData]
+
     @SwiftUI.Environment(\.dismiss) private var dismiss
     @ObservedObject private var store = FlowStore.shared
 
+    @State private var isPickingOutput = false
     @State private var isAddingOutput = false
     @State private var isAddingInput = false
 
@@ -47,6 +54,17 @@ struct FlowStepEditorView: View {
             inputsSection(flow: flow, step: step)
             checksSection(step: step)
         }
+        .sheet(isPresented: $isPickingOutput) {
+            NavigationStack {
+                FlowResponseFieldPicker(response: response) { field in
+                    var updated = step
+                    updated.outputs.append(
+                        FlowOutput(name: field.suggestedName, source: .jsonPath(field.path))
+                    )
+                    save(updated)
+                }
+            }
+        }
         .sheet(isPresented: $isAddingOutput) {
             NavigationStack {
                 FlowOutputEditor { output in
@@ -58,7 +76,10 @@ struct FlowStepEditorView: View {
         }
         .sheet(isPresented: $isAddingInput) {
             NavigationStack {
-                FlowInputEditor(availableNames: flow.availableValueNames(before: step.id)) { input in
+                FlowInputEditor(
+                    availableNames: flow.availableValueNames(before: step.id),
+                    request: step.request
+                ) { input in
                     var updated = step
                     updated.inputs.append(input)
                     save(updated)
@@ -145,15 +166,29 @@ struct FlowStepEditorView: View {
                 save(updated)
             }
 
+            // Выбор из настоящего ответа — основной путь.
+            // Ручной ввод пути остаётся для случая, когда прогона ещё не было
+            Button {
+                isPickingOutput = true
+            } label: {
+                Label(
+                    response == nil ? "Выбрать из ответа (нужен прогон)" : "Выбрать из ответа",
+                    systemImage: "hand.tap"
+                )
+            }
+
             Button {
                 isAddingOutput = true
             } label: {
-                Label("Извлечь значение", systemImage: "plus")
+                Label("Задать путём вручную", systemImage: "character.cursor.ibeam")
             }
+            .font(.callout)
         } header: {
             Text("Из ответа")
         } footer: {
-            Text("Значения станут доступны следующим шагам под этими именами.")
+            Text(response == nil
+                 ? "Запустите сценарий один раз — тогда поля можно будет выбрать из настоящего ответа, а не вводить путём."
+                 : "Значения станут доступны следующим шагам под этими именами.")
         }
     }
 
