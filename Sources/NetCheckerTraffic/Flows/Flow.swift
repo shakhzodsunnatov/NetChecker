@@ -30,6 +30,60 @@ public struct Flow: Identifiable, Codable, Sendable, Hashable {
         !steps.contains { $0.dependsOn.contains(step.id) }
     }
 
+    // MARK: - Редактирование
+
+    /// Заменить шаг на месте
+    public mutating func update(_ step: FlowStep) {
+        guard let index = steps.firstIndex(where: { $0.id == step.id }) else { return }
+        steps[index] = step
+    }
+
+    /// Удалить шаг и все ссылки на него.
+    ///
+    /// Без очистки ссылок остались бы висячие зависимости: выполнению они не
+    /// мешают, но в редакторе выглядели бы как связь с несуществующим шагом.
+    public mutating func removeStep(id: UUID) {
+        steps.removeAll { $0.id == id }
+        for index in steps.indices {
+            steps[index].dependsOn.removeAll { $0 == id }
+        }
+    }
+
+    /// Значения, доступные шагу для подстановки.
+    ///
+    /// Только выходы шагов со строго более ранних уровней: сосед по уровню
+    /// выполняется одновременно, и полагаться на его ответ нельзя.
+    public func availableValueNames(before stepId: UUID) -> [String] {
+        let allLevels = levels()
+        guard let levelIndex = allLevels.firstIndex(where: { level in
+            level.contains { $0.id == stepId }
+        }) else { return [] }
+
+        let earlier = allLevels.prefix(levelIndex).flatMap { $0 }
+        return Array(Set(earlier.flatMap { $0.outputs.map(\.name) })).sorted()
+    }
+
+    /// Шаги, которые можно назначить зависимостями.
+    ///
+    /// Исключается сам шаг и всё, что от него зависит прямо или косвенно, —
+    /// иначе получился бы цикл, и сценарий стал бы невыполнимым.
+    public func possibleDependencies(for stepId: UUID) -> [FlowStep] {
+        var blocked: Set<UUID> = [stepId]
+        var frontier: Set<UUID> = [stepId]
+
+        while !frontier.isEmpty {
+            var next: Set<UUID> = []
+            for step in steps where !blocked.contains(step.id) {
+                guard !frontier.isDisjoint(with: step.dependsOn) else { continue }
+                blocked.insert(step.id)
+                next.insert(step.id)
+            }
+            frontier = next
+        }
+
+        return steps.filter { !blocked.contains($0.id) }
+    }
+
     /// Граф содержит цикл и не может быть выполнен
     public var hasCycle: Bool {
         !steps.isEmpty && levelsIfAcyclic() == nil

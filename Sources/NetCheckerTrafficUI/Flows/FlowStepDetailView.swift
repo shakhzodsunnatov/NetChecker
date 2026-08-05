@@ -8,16 +8,21 @@ public struct NetCheckerTrafficUI_FlowStepDetailView: View {
     let onRetry: () -> Void
     let onSkip: () -> Void
 
+    /// Идентификатор сценария нужен редактору: он правит шаг в хранилище
+    let flowId: UUID?
+
     @SwiftUI.Environment(\.dismiss) private var dismiss
 
     public init(
         step: FlowStep,
         outcome: FlowStepOutcome?,
+        flowId: UUID? = nil,
         onRetry: @escaping () -> Void,
         onSkip: @escaping () -> Void
     ) {
         self.step = step
         self.outcome = outcome
+        self.flowId = flowId
         self.onRetry = onRetry
         self.onSkip = onSkip
     }
@@ -42,6 +47,18 @@ public struct NetCheckerTrafficUI_FlowStepDetailView: View {
                 Section("Условие") {
                     Text(condition.summary)
                         .font(.system(.subheadline, design: .monospaced))
+                }
+            }
+
+            if let flowId = flowId {
+                Section {
+                    NavigationLink {
+                        FlowStepEditorView(flowId: flowId, stepId: step.id)
+                    } label: {
+                        Label("Настроить шаг", systemImage: "slider.horizontal.3")
+                    }
+                } footer: {
+                    Text("Зависимости, условие, передача значений и проверка статуса.")
                 }
             }
 

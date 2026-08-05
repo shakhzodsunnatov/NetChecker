@@ -69,8 +69,9 @@ public struct NetCheckerTrafficUI_FlowCanvasView: View {
         .sheet(item: $selectedStep) { step in
             NavigationStack {
                 NetCheckerTrafficUI_FlowStepDetailView(
-                    step: step,
+                    step: current.step(id: step.id) ?? step,
                     outcome: runner.outcomes[step.id],
+                    flowId: current.id,
                     onRetry: { Task { await runner.retry(from: step.id, in: current) } },
                     onSkip: { Task { await runner.skip(step.id, in: current) } }
                 )
@@ -157,6 +158,19 @@ public struct NetCheckerTrafficUI_FlowCanvasView: View {
             .frame(width: fixedWidth)
             .contentShape(RoundedRectangle(cornerRadius: 13))
             .onTapGesture { selectedStep = step }
+            .contextMenu {
+                Button {
+                    selectedStep = step
+                } label: {
+                    Label("Настроить", systemImage: "slider.horizontal.3")
+                }
+
+                Button(role: .destructive) {
+                    removeStep(step.id)
+                } label: {
+                    Label("Удалить шаг", systemImage: "trash")
+                }
+            }
         }
     }
 
@@ -217,6 +231,14 @@ public struct NetCheckerTrafficUI_FlowCanvasView: View {
         if states.contains(.notRun) { return .notRun }
         if states.contains(.succeeded) { return .active }
         return .idle
+    }
+
+    /// Удаление вместе со ссылками: иначе остались бы зависимости
+    /// от несуществующего шага
+    private func removeStep(_ id: UUID) {
+        var updated = current
+        updated.removeStep(id: id)
+        store.update(updated)
     }
 
     private func appendSteps(from records: [TrafficRecord]) {

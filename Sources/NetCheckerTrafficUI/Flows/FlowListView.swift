@@ -36,6 +36,9 @@ public struct NetCheckerTrafficUI_FlowListView: View {
                 } label: {
                     Image(systemName: "plus")
                 }
+                // Устойчивая цель для UI-тестов: выбор по индексу в панели
+                // ломается, как только там появляется вторая кнопка
+                .accessibilityIdentifier("netchecker.addFlow")
             }
         }
         .alert("Новый сценарий", isPresented: $isNaming) {
