@@ -1,17 +1,21 @@
 import SwiftUI
 import NetCheckerTrafficCore
 
-/// Граф сценария по уровням и управление прогоном.
-///
-/// Строка — уровень выполнения: всё в ней идёт одновременно, поэтому
-/// параллельность видна без подписей. Уровни вычисляются из связей,
-/// раскладку не задают руками, и прокрутка остаётся только вертикальной.
+/// Экран сценария: свободное полотно с шагами и управление прогоном.
 public struct NetCheckerTrafficUI_FlowCanvasView: View {
     let flow: Flow
 
     @StateObject private var runner = FlowRunner()
     @State private var selectedStep: FlowStep?
     @State private var isAddingSteps = false
+    @State private var connecting: FlowConnectTarget?
+
+    /// Пара шагов, между которыми настраивается передача значения
+    struct FlowConnectTarget: Identifiable {
+        let sourceId: UUID
+        let targetId: UUID
+        var id: String { "\(sourceId)-\(targetId)" }
+    }
 
     @ObservedObject private var store = FlowStore.shared
 
@@ -23,8 +27,6 @@ public struct NetCheckerTrafficUI_FlowCanvasView: View {
     private var current: Flow {
         store.flow(id: flow.id) ?? flow
     }
-
-    private var levels: [[FlowStep]] { current.levels() }
 
     public var body: some View {
         VStack(spacing: 0) {
@@ -43,7 +45,16 @@ public struct NetCheckerTrafficUI_FlowCanvasView: View {
             if current.steps.isEmpty {
                 emptyState
             } else {
-                graph
+                FlowGraphView(
+                    flow: current,
+                    outcomes: runner.outcomes,
+                    isRunning: runner.isRunning,
+                    onSelect: { selectedStep = $0 },
+                    onConnect: { source, target in
+                        connecting = FlowConnectTarget(sourceId: source, targetId: target)
+                    },
+                    onDelete: removeStep
+                )
             }
         }
         .navigationTitle(current.name)
@@ -57,6 +68,7 @@ public struct NetCheckerTrafficUI_FlowCanvasView: View {
                 } label: {
                     Image(systemName: "plus")
                 }
+                .accessibilityIdentifier("netchecker.addFlowStep")
 
                 Button {
                     SharePresenter.present(items: [FlowExporter.export(current)])
@@ -75,6 +87,16 @@ public struct NetCheckerTrafficUI_FlowCanvasView: View {
                     previousResponses: runner.outcomes.compactMapValues(\.response),
                     onRetry: { Task { await runner.retry(from: step.id, in: current) } },
                     onSkip: { Task { await runner.skip(step.id, in: current) } }
+                )
+            }
+        }
+        .sheet(item: $connecting) { pair in
+            NavigationStack {
+                FlowConnectView(
+                    flowId: current.id,
+                    sourceStepId: pair.sourceId,
+                    targetStepId: pair.targetId,
+                    sourceResponse: runner.outcomes[pair.sourceId]?.response
                 )
             }
         }
@@ -113,70 +135,6 @@ public struct NetCheckerTrafficUI_FlowCanvasView: View {
         .background(.thinMaterial)
     }
 
-    // MARK: - Граф
-
-    private var graph: some View {
-        ScrollView {
-            VStack(spacing: 0) {
-                ForEach(Array(levels.enumerated()), id: \.offset) { index, level in
-                    if index > 0 {
-                        FlowLevelConnector(connections: connections(toLevel: index))
-                    }
-
-                    FlowLevelCaption(index: index + 1, isParallel: level.count > 1)
-                    levelRow(level, startingIndex: startIndex(of: index))
-                }
-            }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 16)
-        }
-    }
-
-    /// Больше двух узлов не помещаются в ширину телефона, поэтому такая
-    /// строка прокручивается вбок сама по себе — остальной экран неподвижен
-    @ViewBuilder
-    private func levelRow(_ level: [FlowStep], startingIndex: Int) -> some View {
-        if level.count > 2 {
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(alignment: .top, spacing: 8) {
-                    nodes(level, startingIndex: startingIndex, fixedWidth: 158)
-                }
-            }
-        } else {
-            HStack(alignment: .top, spacing: 8) {
-                nodes(level, startingIndex: startingIndex, fixedWidth: nil)
-            }
-        }
-    }
-
-    private func nodes(_ level: [FlowStep], startingIndex: Int, fixedWidth: CGFloat?) -> some View {
-        ForEach(Array(level.enumerated()), id: \.element.id) { offset, step in
-            FlowNodeView(
-                step: step,
-                outcome: runner.outcomes[step.id],
-                index: startingIndex + offset + 1,
-                isFireAndForget: current.isFireAndForget(step),
-                incomingValues: distantInputs(for: step)
-            )
-            .frame(width: fixedWidth)
-            .contentShape(RoundedRectangle(cornerRadius: 13))
-            .onTapGesture { selectedStep = step }
-            .contextMenu {
-                Button {
-                    selectedStep = step
-                } label: {
-                    Label("Настроить", systemImage: "slider.horizontal.3")
-                }
-
-                Button(role: .destructive) {
-                    removeStep(step.id)
-                } label: {
-                    Label("Удалить шаг", systemImage: "trash")
-                }
-            }
-        }
-    }
-
     private var emptyState: some View {
         VStack(spacing: 10) {
             Image(systemName: "point.3.connected.trianglepath.dotted")
@@ -202,74 +160,7 @@ public struct NetCheckerTrafficUI_FlowCanvasView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
-    // MARK: - Вспомогательное
-
-    private func startIndex(of levelIndex: Int) -> Int {
-        levels.prefix(levelIndex).reduce(0) { $0 + $1.count }
-    }
-
-    /// Значения, приходящие не с соседнего уровня — показываются строкой в узле
-    private func distantInputs(for step: FlowStep) -> [String] {
-        guard let levelIndex = levels.firstIndex(where: { level in
-            level.contains { $0.id == step.id }
-        }), levelIndex > 0 else { return [] }
-
-        let adjacent = Set(levels[levelIndex - 1].map(\.id))
-        let distant = step.dependsOn.filter { !adjacent.contains($0) && current.step(id: $0) != nil }
-        guard !distant.isEmpty else { return [] }
-
-        return step.inputs.map(\.name)
-    }
-
-    /// Связи между уровнем `index - 1` и уровнем `index`.
-    ///
-    /// Провод строится для каждой пары «шаг → его зависимость», поэтому
-    /// при нескольких узлах в уровне видно, что именно во что впадает.
-    private func connections(toLevel index: Int) -> [FlowConnection] {
-        let upper = levels[index - 1]
-        let lower = levels[index]
-        guard !upper.isEmpty, !lower.isEmpty else { return [] }
-
-        var result: [FlowConnection] = []
-
-        for (toIndex, target) in lower.enumerated() {
-            let toFraction = fraction(of: toIndex, in: lower.count)
-            let parents = target.dependsOn.compactMap { id in
-                upper.firstIndex { $0.id == id }
-            }
-
-            // Шаг без родителя на предыдущем уровне: рисуем короткий заход,
-            // иначе узел выглядел бы оторванным от графа
-            let sources = parents.isEmpty ? [toIndex.clamped(to: 0..<upper.count)] : parents
-
-            for fromIndex in sources {
-                result.append(
-                    FlowConnection(
-                        id: "\(upper[fromIndex].id)-\(target.id)",
-                        fromFraction: fraction(of: fromIndex, in: upper.count),
-                        toFraction: toFraction,
-                        state: connectionState(from: upper[fromIndex], to: target),
-                        labels: parents.isEmpty ? [] : target.inputs.map(\.name)
-                    )
-                )
-            }
-        }
-
-        return result
-    }
-
-    /// Центр узла в уровне как доля ширины
-    private func fraction(of index: Int, in count: Int) -> CGFloat {
-        guard count > 1 else { return 0.5 }
-        return (CGFloat(index) + 0.5) / CGFloat(count)
-    }
-
-    private func connectionState(from source: FlowStep, to target: FlowStep) -> FlowEdgeState {
-        if case .failed = runner.outcomes[source.id]?.state { return .failed }
-        if runner.outcomes[target.id]?.state == .notRun { return .notRun }
-        if runner.outcomes[source.id]?.state == .succeeded { return .active }
-        return .idle
-    }
+    // MARK: - Изменение сценария
 
     /// Удаление вместе со ссылками: иначе остались бы зависимости
     /// от несуществующего шага

@@ -8,11 +8,6 @@ struct FlowNodeView: View {
     let index: Int
     let isFireAndForget: Bool
 
-    /// Зависимости не с соседнего уровня. Длинные дуги через полэкрана
-    /// не рисуются — вместо них строка внутри узла, иначе полотно
-    /// превращается в клубок
-    let incomingValues: [String]
-
     private var state: FlowStepState { outcome?.state ?? .pending }
 
     var body: some View {
@@ -21,13 +16,7 @@ struct FlowNodeView: View {
             path
             status
             badges
-
-            ForEach(incomingValues, id: \.self) { value in
-                Text("← \(value)")
-                    .font(.system(size: 9.5))
-                    .foregroundStyle(.purple)
-                    .lineLimit(1)
-            }
+            Spacer(minLength: 0)
         }
         .padding(10)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -77,13 +66,14 @@ struct FlowNodeView: View {
             .lineLimit(2)
     }
 
-    @ViewBuilder
     private var badges: some View {
-        if isFireAndForget {
-            chip("не ждём", color: .orange)
-        }
-        if let condition = step.condition {
-            chip(condition.summary, color: .purple)
+        HStack(spacing: 4) {
+            if isFireAndForget {
+                chip("не ждём", color: .orange)
+            }
+            if let condition = step.condition {
+                chip(condition.summary, color: .purple)
+            }
         }
     }
 

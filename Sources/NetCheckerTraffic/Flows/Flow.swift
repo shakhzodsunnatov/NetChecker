@@ -26,8 +26,17 @@ public struct Flow: Identifiable, Codable, Sendable, Hashable {
     /// Никто не ждёт этот шаг — «триггер на всякий случай».
     /// Помечается в интерфейсе, иначе непонятно, почему сценарий
     /// завершился, пока такой запрос ещё летит.
+    ///
+    /// Последний шаг сюда не попадает: его тоже никто не ждёт, но это
+    /// просто конец сценария, и пометка на нём сбивала бы с толку.
     public func isFireAndForget(_ step: FlowStep) -> Bool {
-        !steps.contains { $0.dependsOn.contains(step.id) }
+        guard !steps.contains(where: { $0.dependsOn.contains(step.id) }) else { return false }
+
+        let rows = levels()
+        guard let row = rows.firstIndex(where: { $0.contains { $0.id == step.id } }) else {
+            return false
+        }
+        return row < rows.count - 1
     }
 
     // MARK: - Редактирование

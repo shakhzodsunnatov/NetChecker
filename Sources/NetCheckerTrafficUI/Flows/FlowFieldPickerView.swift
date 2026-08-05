@@ -88,61 +88,6 @@ struct FlowResponseFieldPicker: View {
     }
 }
 
-/// Выбор поля тела запроса — куда подставлять значение
-struct FlowRequestFieldPicker: View {
-    let request: RequestData?
-    let onPick: (String) -> Void
-
-    @SwiftUI.Environment(\.dismiss) private var dismiss
-
-    private var keys: [String] {
-        FlowJSONFields.topLevelKeys(in: request?.body)
-    }
-
-    var body: some View {
-        Group {
-            if keys.isEmpty {
-                FlowHintView(
-                    icon: "curlybraces",
-                    title: "В теле запроса нет полей",
-                    message: "Тело пустое или это не JSON. Значение можно подставить в заголовок, путь или query-параметр."
-                )
-            } else {
-                List {
-                    Section("Поля тела запроса") {
-                        ForEach(keys, id: \.self) { key in
-                            Button {
-                                onPick(key)
-                                dismiss()
-                            } label: {
-                                HStack {
-                                    Text(key)
-                                        .font(.system(.subheadline, design: .monospaced))
-                                        .foregroundStyle(.primary)
-                                    Spacer()
-                                    Image(systemName: "plus.circle")
-                                        .foregroundStyle(Color.accentColor)
-                                }
-                                .contentShape(Rectangle())
-                            }
-                            .buttonStyle(.plain)
-                        }
-                    }
-                }
-            }
-        }
-        .navigationTitle("Куда подставить")
-        #if os(iOS)
-        .navigationBarTitleDisplayMode(.inline)
-        #endif
-        .toolbar {
-            ToolbarItem(placement: .cancellationAction) {
-                Button("Отмена") { dismiss() }
-            }
-        }
-    }
-}
-
 /// Пояснение вместо пустого экрана
 struct FlowHintView: View {
     let icon: String

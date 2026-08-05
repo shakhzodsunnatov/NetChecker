@@ -97,14 +97,34 @@ struct FlowInputEditor: View {
     @State private var name: String = ""
     @State private var kind: Kind = .header
     @State private var target = ""
-    @State private var isPickingBodyField = false
 
-    private var bodyKeys: [String] {
-        FlowJSONFields.topLevelKeys(in: request?.body)
+    /// Места из настоящего запроса
+    private var slots: [FlowRequestSlot] {
+        request.map { FlowRequestSlots.slots(in: $0) } ?? []
     }
 
     private var isValid: Bool {
         !name.isEmpty && !target.trimmingCharacters(in: .whitespaces).isEmpty
+    }
+
+    private func isChosen(_ slot: FlowRequestSlot) -> Bool {
+        slot.name == target.trimmingCharacters(in: .whitespaces) && kind == kind(of: slot)
+    }
+
+    /// Выбор слота заполняет оба поля ручного ввода: так видно,
+    /// что именно записалось, и это остаётся правимым
+    private func apply(_ slot: FlowRequestSlot) {
+        kind = kind(of: slot)
+        target = slot.name
+    }
+
+    private func kind(of slot: FlowRequestSlot) -> Kind {
+        switch slot.kind {
+        case .pathPlaceholder: return .path
+        case .header, .suggestedHeader: return .header
+        case .queryItem: return .query
+        case .bodyField: return .body
+        }
     }
 
     var body: some View {
@@ -116,6 +136,40 @@ struct FlowInputEditor: View {
                 .pickerStyle(.menu)
             }
 
+            // Места из настоящего запроса — вместо абстрактных категорий.
+            // «Заголовок / Путь / Параметр / Тело» ничего не говорили о том,
+            // что в этом запросе вообще есть
+            if !slots.isEmpty {
+                Section {
+                    ForEach(slots) { slot in
+                        Button {
+                            apply(slot)
+                        } label: {
+                            HStack(spacing: 10) {
+                                Image(systemName: isChosen(slot) ? "largecircle.fill.circle" : "circle")
+                                    .foregroundStyle(isChosen(slot) ? Color.accentColor : .secondary)
+
+                                VStack(alignment: .leading, spacing: 1) {
+                                    Text(slot.name)
+                                        .foregroundStyle(.primary)
+                                    Text(slot.currentValue.map { "\(slot.kindTitle) · сейчас \($0)" } ?? slot.kindTitle)
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                        .lineLimit(1)
+                                }
+                                Spacer()
+                            }
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                    }
+                } header: {
+                    Text("Куда положить")
+                } footer: {
+                    Text("Места взяты из самого запроса — видно, что там уже есть.")
+                }
+            }
+
             Section {
                 Picker("Куда", selection: $kind) {
                     ForEach(Kind.allCases, id: \.self) { Text($0.rawValue).tag($0) }
@@ -124,27 +178,10 @@ struct FlowInputEditor: View {
 
                 TextField(placeholder, text: $target)
                     .plainInput()
-
-                // Имя поля тела берётся из самого запроса: вводить его руками
-                // значит рисковать опечаткой, которую видно только в прогоне
-                if kind == .body, !bodyKeys.isEmpty {
-                    Button {
-                        isPickingBodyField = true
-                    } label: {
-                        Label("Выбрать поле тела", systemImage: "hand.tap")
-                    }
-                }
             } header: {
-                Text("Назначение")
+                Text("Или укажите вручную")
             } footer: {
                 Text(footer)
-            }
-        }
-        .sheet(isPresented: $isPickingBodyField) {
-            NavigationStack {
-                FlowRequestFieldPicker(request: request) { key in
-                    target = key
-                }
             }
         }
         .navigationTitle("Подставить значение")

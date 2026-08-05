@@ -10,132 +10,92 @@ enum FlowEdgeState {
     case notRun
 }
 
-/// Одна связь между узлами соседних уровней
-struct FlowConnection: Identifiable {
+/// Провод между двумя узлами полотна
+struct FlowWire: Identifiable {
     let id: String
-    /// Положение исходного узла в своём уровне, доля ширины
-    let fromFraction: CGFloat
-    /// Положение целевого узла
-    let toFraction: CGFloat
-    let state: FlowEdgeState
-    /// Имена передаваемых значений
+    let from: CGPoint
+    let to: CGPoint
+    /// Имена значений, которые по нему передаются
     let labels: [String]
+    let state: FlowEdgeState
+
+    var midpoint: CGPoint {
+        // Точка на кривой при t = 0.5 при вертикальных касательных —
+        // ровно середина по обеим осям
+        CGPoint(x: (from.x + to.x) / 2, y: (from.y + to.y) / 2)
+    }
 }
 
-/// Полоса связей между двумя уровнями.
+/// Кривая с вертикальными касательными на концах.
 ///
-/// Провода идут от конкретного узла к конкретному, а не общей вертикальной
-/// чертой: иначе при нескольких узлах в уровне непонятно, что во что впадает.
-struct FlowLevelConnector: View {
-    let connections: [FlowConnection]
+/// Провод выходит из узла строго вниз и входит в следующий строго сверху —
+/// поэтому стрелка всегда смотрит вниз, а направление читается без подписи.
+struct FlowWireShape: Shape {
+    let from: CGPoint
+    let to: CGPoint
 
-    private let height: CGFloat = 46
-
-    var body: some View {
-        ZStack {
-            GeometryReader { geometry in
-                ForEach(connections) { connection in
-                    curve(for: connection, in: geometry.size)
-                        .stroke(
-                            color(connection.state),
-                            style: StrokeStyle(
-                                lineWidth: 2,
-                                lineCap: .round,
-                                dash: connection.state == .notRun ? [4, 4] : []
-                            )
-                        )
-
-                    arrowHead(for: connection, in: geometry.size)
-                        .fill(color(connection.state))
-                }
-            }
-
-            // Подпись — только у связей, которые что-то передают
-            if let labelled = connections.first(where: { !$0.labels.isEmpty }) {
-                Text(caption(for: labelled.labels))
-                    .font(.system(size: 9.5, weight: .semibold))
-                    .padding(.horizontal, 7)
-                    .padding(.vertical, 3)
-                    .background(background(labelled.state))
-                    .foregroundStyle(color(labelled.state))
-                    .clipShape(Capsule())
-                    .lineLimit(1)
-            }
-        }
-        .frame(height: height)
-        .accessibilityElement()
-        .accessibilityLabel(accessibilityText)
-    }
-
-    // MARK: - Геометрия
-
-    private func curve(for connection: FlowConnection, in size: CGSize) -> Path {
-        let start = CGPoint(x: size.width * connection.fromFraction, y: 0)
-        let end = CGPoint(x: size.width * connection.toFraction, y: size.height - 6)
-
+    func path(in rect: CGRect) -> Path {
         var path = Path()
-        path.move(to: start)
+        path.move(to: from)
+
+        // Чем дальше узлы, тем плавнее дуга; вверх идущие связи
+        // (шаг ждёт кого-то с дальнего уровня) не схлопываются в прямую
+        let reach = max(abs(to.y - from.y) * 0.45, 30)
+
         path.addCurve(
-            to: end,
-            control1: CGPoint(x: start.x, y: size.height * 0.55),
-            control2: CGPoint(x: end.x, y: size.height * 0.45)
+            to: to,
+            control1: CGPoint(x: from.x, y: from.y + reach),
+            control2: CGPoint(x: to.x, y: to.y - reach)
         )
         return path
     }
+}
 
-    private func arrowHead(for connection: FlowConnection, in size: CGSize) -> Path {
-        let tip = CGPoint(x: size.width * connection.toFraction, y: size.height)
+/// Наконечник в точке входа
+struct FlowArrowShape: Shape {
+    let tip: CGPoint
+
+    func path(in rect: CGRect) -> Path {
         var path = Path()
         path.move(to: tip)
-        path.addLine(to: CGPoint(x: tip.x - 4.5, y: tip.y - 7))
-        path.addLine(to: CGPoint(x: tip.x + 4.5, y: tip.y - 7))
+        path.addLine(to: CGPoint(x: tip.x - 5, y: tip.y - 8))
+        path.addLine(to: CGPoint(x: tip.x + 5, y: tip.y - 8))
         path.closeSubpath()
         return path
     }
-
-    // MARK: - Оформление
-
-    private func caption(for labels: [String]) -> String {
-        labels.count <= 2
-            ? labels.joined(separator: " · ")
-            : "\(labels[0]) +\(labels.count - 1)"
-    }
-
-    private func color(_ state: FlowEdgeState) -> Color {
-        switch state {
-        case .idle: return Color.secondary.opacity(0.4)
-        case .active: return .purple
-        case .failed: return .red
-        case .notRun: return Color.secondary.opacity(0.35)
-        }
-    }
-
-    private func background(_ state: FlowEdgeState) -> Color {
-        switch state {
-        case .active: return .purple.opacity(0.14)
-        case .failed: return .red.opacity(0.14)
-        default: return Color.secondary.opacity(0.14)
-        }
-    }
-
-    private var accessibilityText: String {
-        let labels = connections.flatMap(\.labels)
-        return labels.isEmpty ? "Переход к следующему уровню" : "Передаётся: \(labels.joined(separator: ", "))"
-    }
 }
 
-/// Подпись уровня — параллельность видна текстом, а не только раскладкой
-struct FlowLevelCaption: View {
-    let index: Int
-    let isParallel: Bool
+extension FlowEdgeState {
+    var color: Color {
+        switch self {
+        case .idle: return Color.secondary.opacity(0.45)
+        case .active: return .purple
+        case .failed: return .red
+        case .notRun: return Color.secondary.opacity(0.3)
+        }
+    }
 
-    var body: some View {
-        Text(isParallel ? "УРОВЕНЬ \(index) · ОДНОВРЕМЕННО" : "УРОВЕНЬ \(index)")
-            .font(.system(size: 9, weight: .semibold))
-            .tracking(0.5)
-            .foregroundStyle(.secondary)
-            .frame(maxWidth: .infinity)
-            .padding(.bottom, 5)
+    var labelBackground: Color {
+        switch self {
+        case .active: return .purple.opacity(0.16)
+        case .failed: return .red.opacity(0.16)
+        default: return Color.secondary.opacity(0.16)
+        }
+    }
+
+    var dash: [CGFloat] {
+        switch self {
+        case .notRun: return [5, 5]
+        case .active: return [7, 5]
+        default: return []
+        }
+    }
+
+    var lineWidth: CGFloat {
+        switch self {
+        case .active, .failed: return 2.4
+        default: return 1.8
+        }
     }
 }
 

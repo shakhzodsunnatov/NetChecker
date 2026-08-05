@@ -52,6 +52,21 @@ final class FlowGraphTests: XCTestCase {
         XCTAssertFalse(flow.isFireAndForget(a))
     }
 
+    /// Последний шаг тоже никто не ждёт, но это конец сценария,
+    /// а не запрос, отправленный вдогонку
+    func testLastStepIsNotMarkedFireAndForget() {
+        let a = step("a")
+        let b = step("b", dependsOn: [a.id])
+        let flow = Flow(name: "f", steps: [a, b])
+
+        XCTAssertFalse(flow.isFireAndForget(b))
+    }
+
+    func testSingleStepFlowHasNoFireAndForget() {
+        let a = step("a")
+        XCTAssertFalse(Flow(name: "f", steps: [a]).isFireAndForget(a))
+    }
+
     func testLongChainProducesOneLevelPerStep() {
         let a = step("a")
         let b = step("b", dependsOn: [a.id])

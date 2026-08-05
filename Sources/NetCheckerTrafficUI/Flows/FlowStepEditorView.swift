@@ -195,8 +195,23 @@ struct FlowStepEditorView: View {
     private func inputsSection(flow: Flow, step: FlowStep) -> some View {
         Section {
             ForEach(step.inputs) { input in
-                LabeledContent(input.name, value: input.target.summary)
-                    .font(.callout)
+                HStack(spacing: 8) {
+                    Text(input.name)
+                        .font(.subheadline.weight(.medium))
+                        .padding(.horizontal, 7)
+                        .padding(.vertical, 3)
+                        .background(Color.accentColor.opacity(0.15))
+                        .foregroundStyle(Color.accentColor)
+                        .clipShape(Capsule())
+
+                    Image(systemName: "arrow.right")
+                        .font(.system(size: 10))
+                        .foregroundStyle(.secondary)
+
+                    Text(input.target.summary)
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                }
             }
             .onDelete { offsets in
                 var updated = step
@@ -214,7 +229,7 @@ struct FlowStepEditorView: View {
             Text("В запрос")
         } footer: {
             Text(flow.availableValueNames(before: step.id).isEmpty
-                 ? "Подставлять нечего: предыдущие шаги ничего не извлекают."
+                 ? "Подставлять нечего: предыдущие шаги ничего не извлекают. Проще связать значения на полотне — нажмите провод между шагами."
                  : "Если значения не окажется в ответе, шаг упадёт с его именем — вместо пустой подстановки.")
         }
     }
