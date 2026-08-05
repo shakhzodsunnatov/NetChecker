@@ -12,9 +12,18 @@ struct FlowGraphView: View {
     let outcomes: [UUID: FlowStepOutcome]
     let isRunning: Bool
 
+    /// Выделение живёт снаружи: панель действий над ним — часть экрана
+    @Binding var selection: Set<UUID>
+    let isSelecting: Bool
+    let isFullScreen: Bool
+
     var onSelect: (FlowStep) -> Void
     var onConnect: (UUID, UUID) -> Void
     var onDelete: (UUID) -> Void
+    var onDuplicate: (UUID) -> Void
+    var onOpenGroup: (FlowGroup) -> Void
+    var onStartSelecting: (UUID) -> Void
+    var onToggleFullScreen: () -> Void
 
     @State private var zoom: CGFloat = 1
     @State private var pinch: CGFloat = 1
@@ -39,6 +48,15 @@ struct FlowGraphView: View {
     }
 
     var body: some View {
+        // Подсказка занимает место, а не висит поверх: наложением
+        // она закрывала верхние шаги графа
+        VStack(spacing: 0) {
+            legend
+            plane
+        }
+    }
+
+    private var plane: some View {
         GeometryReader { geometry in
             ZStack {
                 grid
@@ -56,11 +74,24 @@ struct FlowGraphView: View {
             .contentShape(Rectangle())
             .gesture(panGesture.simultaneously(with: zoomGesture))
             .overlay(alignment: .bottomTrailing) { controls(in: geometry.size) }
-            .overlay(alignment: .top) { legend }
             .onAppear {
                 guard !didFit else { return }
                 didFit = true
                 fit(in: geometry.size)
+            }
+            // Места стало больше или меньше — вписываем заново,
+            // иначе после перехода граф остаётся в прежнем масштабе
+            .onChange(of: isFullScreen) { _ in
+                withAnimation(.spring(response: 0.36, dampingFraction: 0.85)) {
+                    fit(in: geometry.size)
+                }
+            }
+            // Сборка блока или добавление шага меняет размер полотна.
+            // Без пересчёта часть графа осталась бы за краем экрана
+            .onChange(of: layout.size) { _ in
+                withAnimation(.spring(response: 0.36, dampingFraction: 0.85)) {
+                    fit(in: geometry.size)
+                }
             }
             .onChange(of: isRunning) { running in
                 if running {
@@ -78,6 +109,7 @@ struct FlowGraphView: View {
 
     private var canvas: some View {
         ZStack(alignment: .topLeading) {
+            groupBands
             parallelBands
             wiresLayer
             liveWire
@@ -86,31 +118,76 @@ struct FlowGraphView: View {
         }
     }
 
-    /// Подложка под рядом, где несколько шагов: одновременность
+    // MARK: - Блоки
+
+    /// Рамка блока — по срезу на каждый ряд. Очередь занимает несколько
+    /// рядов, и одна общая рамка накрыла бы чужие шаги в тех же рядах
+    private var groupBands: some View {
+        ForEach(bands) { band in
+            let tint = band.kind.tint
+
+            RoundedRectangle(cornerRadius: 20)
+                .fill(tint.opacity(0.07))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 20)
+                        .strokeBorder(tint.opacity(0.28), lineWidth: 1.5)
+                )
+                .frame(width: band.slice.rect.width + 22, height: band.slice.rect.height + 22)
+                .position(x: band.slice.rect.midX, y: band.slice.rect.midY)
+
+            if band.isFirst {
+                Button {
+                    onOpenGroup(band.group)
+                } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: band.kind.systemImage)
+                            .font(.system(size: 9, weight: .bold))
+                        Text(band.group.name)
+                            .font(.system(size: 10, weight: .bold))
+                            .lineLimit(1)
+                        Text(band.kind == .parallel ? "одновременно" : "по очереди")
+                            .font(.system(size: 9))
+                            .opacity(0.75)
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 7, weight: .bold))
+                            .opacity(0.6)
+                    }
+                    .padding(.horizontal, 9)
+                    .padding(.vertical, 4)
+                    .background(tint.opacity(0.16))
+                    .background(.background, in: Capsule())
+                    .foregroundStyle(tint)
+                    .clipShape(Capsule())
+                }
+                .buttonStyle(.plain)
+                .position(x: band.slice.rect.midX, y: band.slice.rect.minY - 22)
+                .accessibilityIdentifier("netchecker.flowGroup.\(band.group.name)")
+            }
+        }
+    }
+
+    /// Подложка под рядом без блока: одновременность
     /// показывается не только раскладкой, но и словом
     private var parallelBands: some View {
         ForEach(parallelRows, id: \.level) { row in
-            ZStack(alignment: .top) {
-                RoundedRectangle(cornerRadius: 20)
-                    .fill(Color.accentColor.opacity(0.06))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 20)
-                            .strokeBorder(Color.accentColor.opacity(0.18), style: StrokeStyle(lineWidth: 1, dash: [4, 4]))
-                    )
-                    .frame(width: row.rect.width + 20, height: row.rect.height + 20)
-            }
-            .position(x: row.rect.midX, y: row.rect.midY)
-            .overlay(alignment: .top) {
-                Text("ОДНОВРЕМЕННО")
-                    .font(.system(size: 9, weight: .bold))
-                    .tracking(0.6)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 3)
-                    .background(Color.accentColor.opacity(0.14))
-                    .foregroundStyle(Color.accentColor)
-                    .clipShape(Capsule())
-                    .position(x: row.rect.midX, y: row.rect.minY - 20)
-            }
+            RoundedRectangle(cornerRadius: 20)
+                .strokeBorder(
+                    Color.secondary.opacity(0.25),
+                    style: StrokeStyle(lineWidth: 1, dash: [4, 4])
+                )
+                .frame(width: row.rect.width + 20, height: row.rect.height + 20)
+                .position(x: row.rect.midX, y: row.rect.midY)
+
+            Text("ОДНОВРЕМЕННО")
+                .font(.system(size: 9, weight: .bold))
+                .tracking(0.6)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 3)
+                .background(Color.secondary.opacity(0.14))
+                .background(.background, in: Capsule())
+                .foregroundStyle(.secondary)
+                .clipShape(Capsule())
+                .position(x: row.rect.midX, y: row.rect.minY - 20)
         }
     }
 
@@ -176,22 +253,68 @@ struct FlowGraphView: View {
             )
             .frame(width: item.frame.size.width, height: item.frame.size.height, alignment: .top)
             .overlay(dropRing(for: item.frame.id))
+            .overlay(alignment: .topTrailing) { selectionMark(for: item.frame.id) }
             .contentShape(RoundedRectangle(cornerRadius: 13))
-            .onTapGesture { onSelect(item.step) }
-            .contextMenu {
-                Button {
-                    onSelect(item.step)
-                } label: {
-                    Label("Настроить", systemImage: "slider.horizontal.3")
-                }
+            .onTapGesture { tap(item.step) }
+            .contextMenu { menu(for: item.step) }
+            .position(item.frame.center)
+        }
+    }
 
-                Button(role: .destructive) {
-                    onDelete(item.step.id)
-                } label: {
-                    Label("Удалить шаг", systemImage: "trash")
+    private func tap(_ step: FlowStep) {
+        if isSelecting {
+            #if os(iOS)
+            UISelectionFeedbackGenerator().selectionChanged()
+            #endif
+            withAnimation(.spring(response: 0.24, dampingFraction: 0.8)) {
+                if selection.contains(step.id) {
+                    selection.remove(step.id)
+                } else {
+                    selection.insert(step.id)
                 }
             }
-            .position(item.frame.center)
+        } else {
+            onSelect(step)
+        }
+    }
+
+    @ViewBuilder
+    private func menu(for step: FlowStep) -> some View {
+        Button {
+            onSelect(step)
+        } label: {
+            Label("Настроить", systemImage: "slider.horizontal.3")
+        }
+
+        Button {
+            onDuplicate(step.id)
+        } label: {
+            Label("Дублировать", systemImage: "plus.square.on.square")
+        }
+
+        Button {
+            onStartSelecting(step.id)
+        } label: {
+            Label("Выбрать несколько", systemImage: "checkmark.circle")
+        }
+
+        Button(role: .destructive) {
+            onDelete(step.id)
+        } label: {
+            Label("Удалить шаг", systemImage: "trash")
+        }
+    }
+
+    @ViewBuilder
+    private func selectionMark(for id: UUID) -> some View {
+        if isSelecting {
+            Image(systemName: selection.contains(id) ? "checkmark.circle.fill" : "circle")
+                .font(.system(size: 17))
+                .symbolRenderingMode(.palette)
+                .foregroundStyle(.white, selection.contains(id) ? Color.accentColor : Color.secondary)
+                .background(Circle().fill(.background).padding(2))
+                .padding(5)
+                .transition(.scale.combined(with: .opacity))
         }
     }
 
@@ -205,13 +328,18 @@ struct FlowGraphView: View {
                     RoundedRectangle(cornerRadius: 13)
                         .fill((valid ? Color.green : Color.red).opacity(0.1))
                 )
+        } else if isSelecting && selection.contains(id) {
+            RoundedRectangle(cornerRadius: 13)
+                .strokeBorder(Color.accentColor, lineWidth: 2.5)
         }
     }
 
     /// Кружки-выходы. Отдельным слоем поверх узлов, иначе их перекрывает
     /// соседний узел и потянуть провод не выходит
     private var portsLayer: some View {
-        ForEach(Array(layout.nodes.enumerated()), id: \.element.id) { offset, node in
+        // В режиме выбора провода не тянут: кружок перехватывал бы нажатие,
+        // которым отмечают шаг
+        ForEach(isSelecting ? [] : Array(layout.nodes.enumerated()), id: \.element.id) { offset, node in
             outlet(node, index: offset + 1)
         }
     }
@@ -288,6 +416,16 @@ struct FlowGraphView: View {
 
     private func controls(in size: CGSize) -> some View {
         VStack(spacing: 8) {
+            controlButton(
+                isFullScreen ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right.square",
+                label: isFullScreen ? "Выйти из полноэкранного режима" : "На весь экран"
+            ) {
+                withAnimation(.spring(response: 0.36, dampingFraction: 0.85)) {
+                    onToggleFullScreen()
+                }
+            }
+            .accessibilityIdentifier("netchecker.flowFullScreen")
+
             controlButton("questionmark", label: "Как это работает") {
                 withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
                     legendHidden.toggle()
@@ -334,6 +472,7 @@ struct FlowGraphView: View {
                 legendRow("rectangle.on.rectangle", "Ряд — шаги, которые уходят одновременно")
                 legendRow("arrow.down", "Провод — ответ верхнего шага нужен нижнему")
                 legendRow("hand.draw", "Потяните от синего кружка к другому шагу, чтобы передать значение")
+                legendRow("square.dashed", "Долгое нажатие на шаге → «Выбрать несколько» → соберите их в блок")
             }
             .padding(12)
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -352,6 +491,9 @@ struct FlowGraphView: View {
                 .accessibilityLabel("Скрыть подсказку")
             }
             .padding(12)
+            // На весь экран сверху висит плавающая панель — без отступа
+            // подсказка оказалась бы под ней
+            .padding(.top, isFullScreen ? 50 : 0)
             .transition(.move(edge: .top).combined(with: .opacity))
         }
     }
@@ -415,14 +557,35 @@ struct FlowGraphView: View {
         }
     }
 
+    private struct Band: Identifiable {
+        let group: FlowGroup
+        let slice: FlowGraphSlice
+        let isFirst: Bool
+        var kind: FlowGroupKind { group.kind }
+        var id: String { slice.id }
+    }
+
+    private var bands: [Band] {
+        flow.groups.flatMap { group -> [Band] in
+            let slices = layout.slices(of: group.stepIds, id: group.id.uuidString)
+            return slices.enumerated().map { offset, slice in
+                Band(group: group, slice: slice, isFirst: offset == 0)
+            }
+        }
+    }
+
     private struct ParallelRow {
         let level: Int
         let rect: CGRect
     }
 
+    /// Ряды без блока: там, где блок есть, рамку рисует он сам
     private var parallelRows: [ParallelRow] {
-        Dictionary(grouping: layout.nodes, by: \.level)
+        let grouped = Set(flow.groups.flatMap(\.stepIds))
+
+        return Dictionary(grouping: layout.nodes, by: \.level)
             .filter { $0.value.count > 1 }
+            .filter { _, nodes in nodes.allSatisfy { !grouped.contains($0.id) } }
             .map { level, nodes in
                 let rects = nodes.map(\.rect)
                 let minX = rects.map(\.minX).min() ?? 0

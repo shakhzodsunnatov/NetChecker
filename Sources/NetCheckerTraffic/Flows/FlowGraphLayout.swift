@@ -35,6 +35,23 @@ public struct FlowNodeFrame: Identifiable, Sendable, Equatable {
     }
 }
 
+/// Часть блока, попавшая на один уровень.
+///
+/// Блок рисуется не одним прямоугольником на все уровни, а срезом на
+/// каждом: очередь занимает несколько рядов, и общая рамка накрыла бы
+/// заодно чужие шаги, стоящие в тех же рядах.
+public struct FlowGraphSlice: Identifiable, Sendable, Equatable {
+    public let id: String
+    public let level: Int
+    public let rect: CGRect
+
+    public init(id: String, level: Int, rect: CGRect) {
+        self.id = id
+        self.level = level
+        self.rect = rect
+    }
+}
+
 /// Готовая раскладка сценария
 public struct FlowGraphLayout: Sendable, Equatable {
     public let nodes: [FlowNodeFrame]
@@ -57,6 +74,28 @@ public struct FlowGraphLayout: Sendable, Equatable {
     public func node(at point: CGPoint) -> FlowNodeFrame? {
         nodes.first { $0.rect.contains(point) }
     }
+
+    /// Срезы блока по уровням, сверху вниз
+    public func slices(of stepIds: [UUID], id: String) -> [FlowGraphSlice] {
+        let wanted = Set(stepIds)
+        let members = nodes.filter { wanted.contains($0.id) }
+        guard !members.isEmpty else { return [] }
+
+        return Dictionary(grouping: members, by: \.level)
+            .map { level, group -> FlowGraphSlice in
+                let rects = group.map(\.rect)
+                let minX = rects.map(\.minX).min() ?? 0
+                let maxX = rects.map(\.maxX).max() ?? 0
+                let minY = rects.map(\.minY).min() ?? 0
+                let maxY = rects.map(\.maxY).max() ?? 0
+                return FlowGraphSlice(
+                    id: "\(id)-\(level)",
+                    level: level,
+                    rect: CGRect(x: minX, y: minY, width: maxX - minX, height: maxY - minY)
+                )
+            }
+            .sorted { $0.level < $1.level }
+    }
 }
 
 /// Раскладка по уровням: ряд — это то, что идёт одновременно.
@@ -71,7 +110,7 @@ public enum FlowGraphLayoutBuilder {
     public static let padding: CGFloat = 44
 
     public static func layout(_ flow: Flow) -> FlowGraphLayout {
-        let levels = flow.levels()
+        let levels = ordered(flow.levels(), in: flow)
         guard !levels.isEmpty else {
             return FlowGraphLayout(nodes: [], size: .zero, levelCenters: [])
         }
@@ -111,6 +150,52 @@ public enum FlowGraphLayoutBuilder {
             size: CGSize(width: canvasWidth, height: canvasHeight),
             levelCenters: levelCenters
         )
+    }
+
+    /// Разложить каждый ряд по дорожкам: участники одного блока встают
+    /// подряд, иначе рамка блока накрыла бы чужой шаг, случайно оказавшийся
+    /// между ними.
+    ///
+    /// Номер дорожки одинаков на всех рядах, поэтому очередь идёт сверху
+    /// вниз одной колонкой, а не скачет из стороны в сторону.
+    static func ordered(_ levels: [[FlowStep]], in flow: Flow) -> [[FlowStep]] {
+        guard !flow.groups.isEmpty else { return levels }
+
+        var laneOrder: [UUID: Int] = [:]
+        for level in levels {
+            for step in level {
+                let lane = flow.group(containing: step.id)?.id ?? step.id
+                if laneOrder[lane] == nil { laneOrder[lane] = laneOrder.count }
+            }
+        }
+
+        return levels.map { level in
+            level.enumerated()
+                .sorted { left, right in
+                    let leftLane = lane(of: left.element, in: flow)
+                    let rightLane = lane(of: right.element, in: flow)
+
+                    let leftIndex = laneOrder[leftLane] ?? 0
+                    let rightIndex = laneOrder[rightLane] ?? 0
+                    if leftIndex != rightIndex { return leftIndex < rightIndex }
+
+                    // Внутри блока порядок задаёт сам блок
+                    let leftSeat = seat(of: left.element, in: flow)
+                    let rightSeat = seat(of: right.element, in: flow)
+                    if leftSeat != rightSeat { return leftSeat < rightSeat }
+
+                    return left.offset < right.offset
+                }
+                .map(\.element)
+        }
+    }
+
+    private static func lane(of step: FlowStep, in flow: Flow) -> UUID {
+        flow.group(containing: step.id)?.id ?? step.id
+    }
+
+    private static func seat(of step: FlowStep, in flow: Flow) -> Int {
+        flow.group(containing: step.id)?.stepIds.firstIndex(of: step.id) ?? 0
     }
 
     private static func width(ofRowWith level: [FlowStep]) -> CGFloat {

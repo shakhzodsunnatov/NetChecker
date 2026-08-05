@@ -106,6 +106,62 @@ final class FlowGraphLayoutTests: XCTestCase {
         XCTAssertNil(layout.node(at: CGPoint(x: 1, y: 1)))
     }
 
+    // MARK: - Блоки
+
+    /// Чужой шаг не должен попадать между участниками блока,
+    /// иначе рамка блока накроет и его
+    func testGroupMembersStandNextToEachOtherInTheRow() {
+        let a = step("a")
+        let outsider = step("outsider")
+        let b = step("b")
+        var flow = Flow(name: "f", steps: [a, outsider, b])
+
+        let group = flow.addGroup(name: "Блок")
+        flow.addStep(a.id, toGroup: group.id)
+        flow.addStep(b.id, toGroup: group.id)
+
+        let layout = FlowGraphLayoutBuilder.layout(flow)
+        let row = layout.nodes.filter { $0.level == 0 }.sorted { $0.center.x < $1.center.x }
+
+        let names = row.map { flow.step(id: $0.id)!.name }
+        XCTAssertTrue(names == ["a", "b", "outsider"] || names == ["outsider", "a", "b"], "\(names)")
+    }
+
+    func testParallelGroupProducesOneSlice() {
+        let a = step("a")
+        let b = step("b")
+        var flow = Flow(name: "f", steps: [a, b])
+        let group = flow.addGroup(name: "Блок")
+        flow.addStep(a.id, toGroup: group.id)
+        flow.addStep(b.id, toGroup: group.id)
+
+        let layout = FlowGraphLayoutBuilder.layout(flow)
+        let slices = layout.slices(of: flow.group(id: group.id)!.stepIds, id: group.id.uuidString)
+
+        XCTAssertEqual(slices.count, 1)
+        XCTAssertGreaterThan(slices[0].rect.width, FlowGraphLayoutBuilder.nodeSize.width)
+    }
+
+    /// Очередь занимает несколько рядов — по срезу на каждый
+    func testSequenceGroupProducesOneSlicePerLevel() {
+        let a = step("a")
+        let b = step("b")
+        var flow = Flow(name: "f", steps: [a, b])
+        let group = flow.addGroup(name: "Очередь", kind: .sequence)
+        flow.addStep(a.id, toGroup: group.id)
+        flow.addStep(b.id, toGroup: group.id)
+
+        let layout = FlowGraphLayoutBuilder.layout(flow)
+        let slices = layout.slices(of: flow.group(id: group.id)!.stepIds, id: group.id.uuidString)
+
+        XCTAssertEqual(slices.map(\.level), [0, 1])
+    }
+
+    func testSlicesAreEmptyForStepsThatAreGone() {
+        let layout = FlowGraphLayoutBuilder.layout(Flow(name: "f", steps: [step("a")]))
+        XCTAssertTrue(layout.slices(of: [UUID()], id: "x").isEmpty)
+    }
+
     func testLevelCentresMatchNodeRows() {
         let a = step("a")
         let b = step("b", dependsOn: [a.id])

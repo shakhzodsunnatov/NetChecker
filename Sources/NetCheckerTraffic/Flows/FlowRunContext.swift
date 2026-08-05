@@ -31,6 +31,14 @@ public enum FlowStepState: Codable, Sendable, Hashable {
     case skipped
     /// Прогон остановился раньше, до этого шага дело не дошло
     case notRun
+
+    /// Шаг больше ничего не ждёт — по нему уже есть решение
+    public var isFinished: Bool {
+        switch self {
+        case .pending, .running: return false
+        case .succeeded, .failed, .skipped, .notRun: return true
+        }
+    }
 }
 
 /// Итог одного шага

@@ -10,13 +10,35 @@ public struct Flow: Identifiable, Codable, Sendable, Hashable {
     public var id: UUID
     public var name: String
     public var steps: [FlowStep]
+    /// Блоки-контейнеры. Порядок выполнения задают всё те же зависимости,
+    /// блок лишь расставляет их за пользователя
+    public var groups: [FlowGroup]
     public var createdAt: Date
 
-    public init(id: UUID = UUID(), name: String, steps: [FlowStep] = [], createdAt: Date = Date()) {
+    public init(
+        id: UUID = UUID(),
+        name: String,
+        steps: [FlowStep] = [],
+        groups: [FlowGroup] = [],
+        createdAt: Date = Date()
+    ) {
         self.id = id
         self.name = name
         self.steps = steps
+        self.groups = groups
         self.createdAt = createdAt
+    }
+
+    // Разбор написан руками: у сохранённых сценариев ключа `groups` нет,
+    // а синтезированный Decodable значения по умолчанию не подставляет —
+    // после обновления такие сценарии просто исчезли бы
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(UUID.self, forKey: .id)
+        name = try container.decode(String.self, forKey: .name)
+        steps = try container.decode([FlowStep].self, forKey: .steps)
+        groups = try container.decodeIfPresent([FlowGroup].self, forKey: .groups) ?? []
+        createdAt = try container.decode(Date.self, forKey: .createdAt)
     }
 
     public func step(id: UUID) -> FlowStep? {
@@ -56,6 +78,14 @@ public struct Flow: Identifiable, Codable, Sendable, Hashable {
         for index in steps.indices {
             steps[index].dependsOn.removeAll { $0 == id }
         }
+        for index in groups.indices {
+            groups[index].stepIds.removeAll { $0 == id }
+        }
+    }
+
+    /// Удалить несколько шагов разом
+    public mutating func removeSteps(ids: Set<UUID>) {
+        for id in ids { removeStep(id: id) }
     }
 
     /// Значения, доступные шагу для подстановки.

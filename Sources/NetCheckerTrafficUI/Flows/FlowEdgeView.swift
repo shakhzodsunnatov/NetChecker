@@ -99,6 +99,17 @@ extension FlowEdgeState {
     }
 }
 
+extension FlowGroupKind {
+    /// Цвет блока. Два вида различаются не только им: у каждого свой значок
+    /// и подпись под именем
+    var tint: Color {
+        switch self {
+        case .parallel: return .blue
+        case .sequence: return .indigo
+        }
+    }
+}
+
 extension Int {
     /// Ограничить индекс диапазоном — уровень мог сжаться после удаления шага
     func clamped(to range: Range<Int>) -> Int {
