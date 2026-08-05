@@ -13,6 +13,8 @@
 
 // MARK: - Views
 public typealias TrafficListView = NetCheckerTrafficUI_TrafficListView
+public typealias FlowListView = NetCheckerTrafficUI_FlowListView
+public typealias FlowCanvasView = NetCheckerTrafficUI_FlowCanvasView
 public typealias TrafficDetailView = NetCheckerTrafficUI_TrafficDetailView
 public typealias RequestDetailView = NetCheckerTrafficUI_RequestDetailView
 public typealias ResponseDetailView = NetCheckerTrafficUI_ResponseDetailView

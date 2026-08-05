@@ -213,6 +213,6 @@ final class InspectorFeatureSettingsTests: XCTestCase {
     func testVisibleOrderIsStable() {
         settings.setVisible(false, for: .environments)
 
-        XCTAssertEqual(settings.visible, [.traffic, .mocks, .breakpoints])
+        XCTAssertEqual(settings.visible, [.traffic, .flows, .mocks, .breakpoints])
     }
 }

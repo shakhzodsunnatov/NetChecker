@@ -505,6 +505,29 @@ if let debugMode = TrafficInterceptor.shared.variable("DEBUG") {
 ```
 
 ---
+### 🔗 API Flows
+
+A feature usually spans several calls, and the fourth cannot be tested without the first three: login returns a token, creating an order returns its id, and only then does paying mean anything.
+
+Build the chain from requests you already captured and run it with one tap — no code, no rebuild. Values move between steps by name: `token` from the login response becomes the `Authorization` header of every later step, `orderId` fills the `{orderId}` placeholder in `/orders/{orderId}/pay`.
+
+**Order comes from the edges, not a mode switch.** A step runs once everything it depends on has finished:
+
+| What you want | How it's expressed |
+|---|---|
+| Strict order | each step depends on the previous one |
+| Two calls at once | neither depends on anything |
+| Wait for both | the step depends on both |
+| Fire one off and don't wait | nothing depends on it — marked "не ждём" |
+
+**Conditions give you if/else.** Two steps depending on the same parent, one with `total > 0` and one with the opposite, means exactly one runs; the other is skipped, which is not a failure.
+
+**A failure stops the run but keeps what was collected.** Retry from that step resumes instead of starting over from login. The step sheet shows what was actually substituted — that is usually what broke, not the request itself.
+
+**Flows export to a file**, so a backend engineer can run the same scenario without a TestFlight build. Sensitive header values are replaced on export, so a live token does not travel with it.
+
+---
+
 ### 📊 Programmatic Access
 
 Access traffic data in your code:
@@ -724,6 +747,7 @@ TrafficInterceptor.shared.enableProxyMode(
 - [x] Environment switching
 - [x] Network condition simulation — 3G, Edge, offline, packet loss
 - [x] HAR import and session replay
+- [x] API flows — chain captured requests, run them in one tap, share as a file
 - [ ] WebSocket traffic inspection
 - [ ] gRPC support
 - [ ] Shared team mock configurations

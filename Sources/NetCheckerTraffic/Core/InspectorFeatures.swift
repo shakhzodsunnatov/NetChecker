@@ -3,6 +3,7 @@ import Foundation
 /// Раздел инспектора, который можно скрыть
 public enum InspectorFeature: String, CaseIterable, Codable, Sendable, Identifiable {
     case traffic
+    case flows
     case environments
     case mocks
     case breakpoints
@@ -12,6 +13,7 @@ public enum InspectorFeature: String, CaseIterable, Codable, Sendable, Identifia
     public var title: String {
         switch self {
         case .traffic: return "Traffic"
+        case .flows: return "Flows"
         case .environments: return "Environments"
         case .mocks: return "Mocks"
         case .breakpoints: return "Breakpoints"
@@ -21,6 +23,7 @@ public enum InspectorFeature: String, CaseIterable, Codable, Sendable, Identifia
     public var systemImage: String {
         switch self {
         case .traffic: return "network"
+        case .flows: return "point.3.connected.trianglepath.dotted"
         case .environments: return "server.rack"
         case .mocks: return "theatermasks"
         case .breakpoints: return "hand.raised"
@@ -30,6 +33,7 @@ public enum InspectorFeature: String, CaseIterable, Codable, Sendable, Identifia
     public var summary: String {
         switch self {
         case .traffic: return "Перехваченные запросы, импорт и экспорт HAR"
+        case .flows: return "Сценарии из связанных запросов"
         case .environments: return "Переключение окружений и токенов"
         case .mocks: return "Подмена ответов правилами"
         case .breakpoints: return "Остановка запросов и ответов"

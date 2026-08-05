@@ -274,6 +274,8 @@ struct TrafficInspectorSheet: View {
         switch feature {
         case .traffic:
             NetCheckerTrafficUI_TrafficListView()
+        case .flows:
+            NetCheckerTrafficUI_FlowListView()
         case .environments:
             NetCheckerTrafficUI_EnvironmentSwitcherView()
         case .mocks:
